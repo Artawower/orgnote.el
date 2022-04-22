@@ -1,4 +1,4 @@
-;;; blamer.el --- Show git blame info about current line           -*- lexical-binding: t; -*-
+;;; web-roam.el --- Show git blame info about current line           -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2022 Artur Yaroshenko
 
@@ -45,7 +45,7 @@
 (defun web-roam--execute-async-cmd (cmd)
   "Execute async CMD."
   (add-to-list 'display-buffer-alist
-  '("\\*Second Brain Async Command\\*.*" display-buffer-no-window))
+               '("\\*Second Brain Async Command\\*.*" display-buffer-no-window))
 
   (let* ((output-buffer (generate-new-buffer web-roam--async-buffer-name))
          (proc (progn
@@ -53,6 +53,11 @@
                  (get-buffer-process output-buffer))))
     (when (process-live-p proc)
       (set-process-sentinel proc 'web-roam--handle-cmd-result))))
+
+(defun web-roam--org-file-p ()
+  "Return t when current FILE-NAME is org file."
+  (and (buffer-file-name)
+       (equal (file-name-extension (buffer-file-name)) "org")))
 
 ;;;###autoload
 (defun web-roam-install-dependencies ()
@@ -67,6 +72,7 @@ Node js 14+ version is required."
   (interactive)
   (when (web-roam--org-file-p)
     (web-roam--execute-async-cmd
+     ;; TODO: master add error handler, suggest install dependencies if not found
      (format "second-brain-publisher publish %s"
              (web-roam--normalize-path (buffer-file-name))))))
 
@@ -76,11 +82,6 @@ Node js 14+ version is required."
   (interactive)
   (web-roam--execute-async-cmd
    "second-brain-publisher publish-all"))
-
-(defun web-roam--org-file-p ()
-  "Return t when current FILE-NAME is org file."
-  (and (buffer-file-name)
-       (equal (file-name-extension (buffer-file-name)) "org")))
 
 ;;;###autoload
 (define-minor-mode web-roam-sync-mode
@@ -96,9 +97,10 @@ be synced with remote service."
   :global nil
   :lighter nil
   :group 'web-roam
-  (if (web-roam--org-file-p)
-      (message "Org file")
-    (message "Current file is not a org file")))
+  (if web-roam-sync-mode
+      (when (web-roam--org-file-p)
+        (add-hook 'before-save-hook #'web-roam-publish-file nil t))
+    (remove-hook 'before-save-hook #'web-roam-publish-file t)))
 
 (provide 'web-roam)
 ;;; web-roam.el ends here
