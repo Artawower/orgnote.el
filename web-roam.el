@@ -42,7 +42,7 @@
   "The name of second brain buffer that run in background.")
 
 (defun web-roam--normalize-path (path)
-  "Normalize file PATH. Shield spaces."
+  "Normalize file PATH.  Shield spaces."
   (replace-regexp-in-string " " "\\\\\  " path))
 
 (defun web-roam--handle-cmd-result (process signal)
