@@ -5,7 +5,7 @@
 ;; Author: Artur Yaroshenko <artawower@protonmail.com>
 ;; URL: https://github.com/Artawower/web-roam.el
 ;; Package-Requires: ((emacs "27.1"))
-;; Version: 0.0.1
+;; Version: 0.0.2
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -38,30 +38,49 @@
   :group 'web-roam
   :type 'string)
 
-(defconst web-roam--async-buffer-name "*Second Brain Async Command*"
-  "The name of second brain buffer that run in background.")
+(defcustom web-roam--second-brain-log-buffer "*Web roam. Second Brain log*"
+  "The name of second brain buffer that run in background."
+  :group 'web-roam
+  :type 'string)
+
+(defconst web-roam--available-commands '("publish" "publish-all")
+  "Available commands for second brain.")
 
 (defun web-roam--normalize-path (path)
   "Normalize file PATH.  Shield spaces."
   (replace-regexp-in-string " " "\\\\\  " path))
 
-(defun web-roam--handle-cmd-result (process signal)
-  "Handle result from shell stdout by PROCESS and SIGNAL."
+(defun web-roam--pretty-log (format-text &rest args)
+  "Pretty print FORMAT-TEXT with ARGS."
+  (message (concat "[web-roam.el] " format-text) args))
+
+(defun web-roam--handle-cmd-result (process signal &optional cmd)
+  "Handle result from shell stdout by PROCESS and SIGNAL.
+
+CMD - optional external command for logging."
   (when (memq (process-status process) '(exit signal))
-    (message "Completely done.")
-    (shell-command-sentinel process signal)))
+    (web-roam--pretty-log "Completely done.")
+    (shell-command-sentinel process signal)
+    (when cmd
+      (with-current-buffer web-roam--second-brain-log-buffer
+        (setq buffer-read-only nil)
+        (goto-char (point-max))
+        (insert "last command: " cmd)
+        (setq buffer-read-only t)))))
 
 (defun web-roam--execute-async-cmd (cmd)
   "Execute async CMD."
   (add-to-list 'display-buffer-alist
-               '("\\*Second Brain Async Command\\*.*" display-buffer-no-window))
+               `(,web-roam--second-brain-log-buffer display-buffer-no-window))
 
-  (let* ((output-buffer (generate-new-buffer web-roam--async-buffer-name))
+  (let* ((output-buffer (get-buffer-create web-roam--second-brain-log-buffer))
          (proc (progn
-                 (async-shell-command cmd output-buffer)
+                 (async-shell-command cmd output-buffer output-buffer)
                  (get-buffer-process output-buffer))))
+    
     (when (process-live-p proc)
-      (set-process-sentinel proc 'web-roam--handle-cmd-result))))
+      (set-process-sentinel proc (lambda (process event)
+                                   (web-roam--handle-cmd-result process event cmd))))))
 
 (defun web-roam--org-file-p ()
   "Return t when current FILE-NAME is org file."
@@ -94,6 +113,30 @@ Also you are free to use array of such objects instead of single object."
 
       (gethash (completing-read "Choose server for publish: " server-names) name-to-config))))
 
+(defun web-roam--execute-command (cmd &optional args)
+  "Execute command CMD via string ARGS.
+CMD could be publish and publish-all"
+
+  (unless (member cmd web-roam--available-commands)
+    (error (format "[web-roam.el] Unknown command %s" cmd)))
+
+  (unless (web-roam--org-file-p)
+    (web-roam--pretty-log "Configuration file %s not found" web-roam-configuration-file-path))
+
+  (when (web-roam--org-file-p)
+    (let* ((config (web-roam--read-configurations))
+           (remote-address (gethash "remoteAddress" config))
+           (token (gethash "token" config))
+           (remote-address-cli (if remote-address (concat " --remote-address " remote-address) ""))
+           (token-cli (if token (concat " --token " token) ""))
+           (args (or args "")))
+      (web-roam--execute-async-cmd
+       (format "second-brain-publisher %s %s%s %s"
+               cmd
+               remote-address-cli
+               token-cli
+               args)))))
+
 ;;;###autoload
 (defun web-roam-install-dependencies ()
   "Install necessary dependencies for second brain.
@@ -105,25 +148,17 @@ Node js 14+ version is required."
 (defun web-roam-publish-file ()
   "Publish current opened file to second brain service."
   (interactive)
-  (when (web-roam--org-file-p)
-    (let* ((config (web-roam--read-configurations))
-           (remote-address (gethash "remoteAddress" config))
-           (token (gethash "token" config))
-           (remote-address-cli (if remote-address (concat " --remote-address " remote-address) ""))
-           (token-cli (if token (concat " --token " token) "")))
-      (web-roam--execute-async-cmd
-       ;; TODO: master add error handler, suggest install dependencies if not found
-       (format "second-brain-publisher publish %s%s %s"
-               remote-address-cli
-               token-cli
-               (web-roam--normalize-path (buffer-file-name)))))))
+  (web-roam--execute-command "publish" (web-roam--normalize-path (buffer-file-name))))
 
 ;;;###autoload
 (defun web-roam-publish-all ()
   "Publish all files to second brain service."
   (interactive)
-  (web-roam--execute-async-cmd
-   "second-brain-publisher publish-all"))
+  (web-roam--execute-command "publish-all"))
+
+(defun web-roam-sync ()
+  "Sync all files with secdon brain service.
+NOTE: this method could broke conflict notes right now.")
 
 ;;;###autoload
 (define-minor-mode web-roam-sync-mode
