@@ -33,15 +33,18 @@
   :group 'web-roam
   :type 'string)
 
+(defcustom web-roam-debug-p nil
+  "Enable debug mode for better logging."
+  :group 'web-roam
+  :type 'boolean)
+
 (defcustom web-roam-configuration-file-path "~/.config/second-brain/config.json"
   "Path to configuration file for second brain."
   :group 'web-roam
   :type 'string)
 
-(defcustom web-roam--second-brain-log-buffer "*Web roam. Second Brain log*"
-  "The name of second brain buffer that run in background."
-  :group 'web-roam
-  :type 'string)
+(defconst web-roam--second-brain-log-buffer "*Web roam. Second Brain log*"
+  "The name of second brain buffer that run in background.")
 
 (defconst web-roam--available-commands '("publish" "publish-all")
   "Available commands for second brain.")
@@ -74,6 +77,7 @@ CMD - optional external command for logging."
                `(,web-roam--second-brain-log-buffer display-buffer-no-window))
 
   (let* ((output-buffer (get-buffer-create web-roam--second-brain-log-buffer))
+         (cmd (if web-roam-debug-p (concat cmd " --debug") cmd))
          (proc (progn
                  (async-shell-command cmd output-buffer output-buffer)
                  (get-buffer-process output-buffer))))
@@ -120,7 +124,7 @@ CMD could be publish and publish-all"
   (unless (member cmd web-roam--available-commands)
     (error (format "[web-roam.el] Unknown command %s" cmd)))
 
-  (unless (web-roam--org-file-p)
+  (unless (file-exists-p web-roam-configuration-file-path)
     (web-roam--pretty-log "Configuration file %s not found" web-roam-configuration-file-path))
 
   (when (web-roam--org-file-p)

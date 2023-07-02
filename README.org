@@ -53,6 +53,12 @@
                     :keymaps 'org-mode-map
                     "SPC np" 'web-roam-publish-file))
 #+END_SRC
+* 👨‍🍳 Usage
+** Variables
+~web-roam-debug-p~ - enable debug mode for additional logging. Consider enabling the flag when you create a bug-related question
+~web-roam-configuration-file-path~ - path to the configuration file. Default is `~/.config/second-brain/config.json`
+~web-roam-execution-script~ - path to the execution script. Default is ~second-brain-publisher~
+Read more about execution script [[https://github.com/Artawower/second-brain-publisher][here]]
 * 🍩 Contribute guide
 Any contribution is very much appreciated! Please read the [[./CONTRIBUTE.org][style guide]] before contributing to avoid misunderstandings!
 Also, the project exists solely on donations. I would appreciate it if you would join my patreon.
