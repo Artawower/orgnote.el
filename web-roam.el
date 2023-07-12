@@ -5,7 +5,7 @@
 ;; Author: Artur Yaroshenko <artawower@protonmail.com>
 ;; URL: https://github.com/Artawower/web-roam.el
 ;; Package-Requires: ((emacs "27.1"))
-;; Version: 0.0.2
+;; Version: 0.0.3
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -127,19 +127,18 @@ CMD could be publish and publish-all"
   (unless (file-exists-p web-roam-configuration-file-path)
     (web-roam--pretty-log "Configuration file %s not found" web-roam-configuration-file-path))
 
-  (when (web-roam--org-file-p)
-    (let* ((config (web-roam--read-configurations))
-           (remote-address (gethash "remoteAddress" config))
-           (token (gethash "token" config))
-           (remote-address-cli (if remote-address (concat " --remote-address " remote-address) ""))
-           (token-cli (if token (concat " --token " token) ""))
-           (args (or args "")))
-      (web-roam--execute-async-cmd
-       (format "second-brain-publisher %s %s%s %s"
-               cmd
-               remote-address-cli
-               token-cli
-               args)))))
+  (let* ((config (web-roam--read-configurations))
+         (remote-address (gethash "remoteAddress" config))
+         (token (gethash "token" config))
+         (remote-address-cli (if remote-address (concat " --remote-address " remote-address) ""))
+         (token-cli (if token (concat " --token " token) ""))
+         (args (or args "")))
+    (web-roam--execute-async-cmd
+     (format "second-brain-publisher %s %s%s %s"
+             cmd
+             remote-address-cli
+             token-cli
+             args))))
 
 ;;;###autoload
 (defun web-roam-install-dependencies ()
@@ -152,7 +151,8 @@ Node js 14+ version is required."
 (defun web-roam-publish-file ()
   "Publish current opened file to second brain service."
   (interactive)
-  (web-roam--execute-command "publish" (web-roam--normalize-path (buffer-file-name))))
+  (when (web-roam--org-file-p)
+    (web-roam--execute-command "publish" (web-roam--normalize-path (buffer-file-name)))))
 
 ;;;###autoload
 (defun web-roam-publish-all ()
