@@ -5,7 +5,7 @@
 ;; Author: Artur Yaroshenko <artawower@protonmail.com>
 ;; URL: https://github.com/Artawower/web-roam.el
 ;; Package-Requires: ((emacs "27.1"))
-;; Version: 0.0.3
+;; Version: 0.0.5
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -134,11 +134,12 @@ CMD could be publish and publish-all"
          (token-cli (if token (concat " --token " token) ""))
          (args (or args "")))
     (web-roam--execute-async-cmd
-     (format "second-brain-publisher %s %s%s %s"
-             cmd
-             remote-address-cli
-             token-cli
-             args))))
+     (concat web-roam-execution-script
+             (format " %s %s%s %s"
+                     cmd
+                     remote-address-cli
+                     token-cli
+                     args)))))
 
 ;;;###autoload
 (defun web-roam-install-dependencies ()
