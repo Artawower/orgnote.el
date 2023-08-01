@@ -1,11 +1,11 @@
-;;; web-roam.el --- Show git blame info about current line           -*- lexical-binding: t; -*-
+5;; web-roam.el --- Show git blame info about current line           -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2022 Artur Yaroshenko
 
 ;; Author: Artur Yaroshenko <artawower@protonmail.com>
 ;; URL: https://github.com/Artawower/web-roam.el
 ;; Package-Requires: ((emacs "27.1"))
-;; Version: 0.0.5
+;; Version: 0.0.6
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -46,7 +46,7 @@
 (defconst web-roam--second-brain-log-buffer "*Web roam. Second Brain log*"
   "The name of second brain buffer that run in background.")
 
-(defconst web-roam--available-commands '("publish" "publish-all")
+(defconst web-roam--available-commands '("publish" "publish-all" "load" "sync")
   "Available commands for second brain.")
 
 (defun web-roam--normalize-path (path)
@@ -91,8 +91,8 @@ CMD - optional external command for logging."
   (and (buffer-file-name)
        (equal (file-name-extension (buffer-file-name)) "org")))
 
-(defun web-roam--read-configurations ()
-  "Read config files for push notes to remote server.
+(defun web-roam--read-configurations (cmd)
+  "Read config files for CMD to remote server.
 The default config file path is ~/.config/second-brain/config.json.
 With next schema:
 [
@@ -115,7 +115,7 @@ Also you are free to use array of such objects instead of single object."
         (puthash (gethash "name" conf) conf name-to-config)
         (push (gethash "name" conf) server-names))
 
-      (gethash (completing-read "Choose server for publish: " server-names) name-to-config))))
+      (gethash (completing-read (format "Choose server for %s: " cmd) server-names) name-to-config))))
 
 (defun web-roam--execute-command (cmd &optional args)
   "Execute command CMD via string ARGS.
@@ -127,7 +127,7 @@ CMD could be publish and publish-all"
   (unless (file-exists-p web-roam-configuration-file-path)
     (web-roam--pretty-log "Configuration file %s not found" web-roam-configuration-file-path))
 
-  (let* ((config (web-roam--read-configurations))
+  (let* ((config (web-roam--read-configurations cmd))
          (remote-address (gethash "remoteAddress" config))
          (token (gethash "token" config))
          (remote-address-cli (if remote-address (concat " --remote-address " remote-address) ""))
@@ -161,9 +161,17 @@ Node js 14+ version is required."
   (interactive)
   (web-roam--execute-command "publish-all"))
 
+;;;###autoload
+(defun web-roam-load ()
+  "Load notes from remote."
+  (interactive)
+  (web-roam--execute-command "load"))
+
+;;;###autoload
 (defun web-roam-sync ()
-  "Sync all files with secdon brain service.
-NOTE: this method could broke conflict notes right now.")
+  "Sync all files with second brain service."
+  (interactive)
+  (web-roam--execute-command "sync"))
 
 ;;;###autoload
 (define-minor-mode web-roam-sync-mode
