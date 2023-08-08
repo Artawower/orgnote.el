@@ -1,11 +1,11 @@
-5;; web-roam.el --- Show git blame info about current line           -*- lexical-binding: t; -*-
+;; web-roam.el --- Show git blame info about current line           -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2022 Artur Yaroshenko
 
 ;; Author: Artur Yaroshenko <artawower@protonmail.com>
 ;; URL: https://github.com/Artawower/web-roam.el
 ;; Package-Requires: ((emacs "27.1"))
-;; Version: 0.0.6
+;; Version: 0.7.2
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -27,6 +27,7 @@
 ;;; Code:
 
 (require 'json)
+(require 'cl)
 
 (defcustom web-roam-execution-script "second-brain-publisher"
   "Bin command from cli to execute external script."
@@ -51,7 +52,7 @@
 
 (defun web-roam--normalize-path (path)
   "Normalize file PATH.  Shield spaces."
-  (replace-regexp-in-string " " "\\\\\  " path))
+  (replace-regexp-in-string " " "\  " path))
 
 (defun web-roam--pretty-log (format-text &rest args)
   "Pretty print FORMAT-TEXT with ARGS."
@@ -77,14 +78,15 @@ CMD - optional external command for logging."
                `(,web-roam--second-brain-log-buffer display-buffer-no-window))
 
   (let* ((output-buffer (get-buffer-create web-roam--second-brain-log-buffer))
-         (cmd (if web-roam-debug-p (concat cmd " --debug") cmd))
+         (final-cmd (if web-roam-debug-p (concat cmd "--debug") cmd))
          (proc (progn
                  (async-shell-command cmd output-buffer output-buffer)
                  (get-buffer-process output-buffer))))
     
     (when (process-live-p proc)
-      (set-process-sentinel proc (lambda (process event)
-                                   (web-roam--handle-cmd-result process event cmd))))))
+      (lexical-let ((fcmd final-cmd))
+        (set-process-sentinel proc (lambda (process event)
+                                     (web-roam--handle-cmd-result process event fcmd)))))))
 
 (defun web-roam--org-file-p ()
   "Return t when current FILE-NAME is org file."
