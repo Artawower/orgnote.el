@@ -5,7 +5,7 @@
 ;; Author: Artur Yaroshenko <artawower@protonmail.com>
 ;; URL: https://github.com/Artawower/web-roam.el
 ;; Package-Requires: ((emacs "27.1"))
-;; Version: 0.7.6
+;; Version: 0.7.7
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
