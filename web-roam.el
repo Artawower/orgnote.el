@@ -5,7 +5,7 @@
 ;; Author: Artur Yaroshenko <artawower@protonmail.com>
 ;; URL: https://github.com/Artawower/web-roam.el
 ;; Package-Requires: ((emacs "27.1"))
-;; Version: v0.7.8
+;; Version: v0.8.0
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -21,15 +21,15 @@
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-;; This package provides functionality for syncing org roam notes with external service - second brain
-;; For more detail check https://github.com/Artawower/second-brain project.
+;; This package provides functionality for syncing org roam notes with external service - Org Note
+;; For more detail check https://github.com/Artawower/orgnote project.
 ;; This is an early alpha version of this app, it may have many bugs and problems, try to back up your notes before using it.
 ;;; Code:
 
 (require 'json)
 (require 'cl)
 
-(defcustom web-roam-execution-script "second-brain-publisher"
+(defcustom web-roam-execution-script "orgnote-cli"
   "Bin command from cli to execute external script."
   :group 'web-roam
   :type 'string)
@@ -39,16 +39,16 @@
   :group 'web-roam
   :type 'boolean)
 
-(defcustom web-roam-configuration-file-path "~/.config/second-brain/config.json"
-  "Path to configuration file for second brain."
+(defcustom web-roam-configuration-file-path "~/.config/orgnote/config.json"
+  "Path to configuration file for Org Note."
   :group 'web-roam
   :type 'string)
 
-(defconst web-roam--second-brain-log-buffer "*Web roam. Second Brain log*"
-  "The name of second brain buffer that run in background.")
+(defconst web-roam--orgnote-log-buffer "*Web roam. Org Note log*"
+  "The name of Org Note buffer that run in background.")
 
 (defconst web-roam--available-commands '("publish" "publish-all" "load" "sync")
-  "Available commands for second brain.")
+  "Available commands for Org Note.")
 
 (defun web-roam--normalize-path (path)
   "Normalize file PATH.  Shield spaces."
@@ -66,7 +66,7 @@ CMD - optional external command for logging."
     (web-roam--pretty-log "Completely done.")
     (shell-command-sentinel process signal)
     (when cmd
-      (with-current-buffer web-roam--second-brain-log-buffer
+      (with-current-buffer web-roam--orgnote-log-buffer
         (setq buffer-read-only nil)
         (goto-char (point-max))
         (insert "last command: " cmd)
@@ -75,10 +75,10 @@ CMD - optional external command for logging."
 (defun web-roam--execute-async-cmd (cmd)
   "Execute async CMD."
   (add-to-list 'display-buffer-alist
-               `(,web-roam--second-brain-log-buffer display-buffer-no-window))
+               `(,web-roam--orgnote-log-buffer display-buffer-no-window))
 
-  (let* ((output-buffer (get-buffer-create web-roam--second-brain-log-buffer))
-         (final-cmd (if web-roam-debug-p (concat cmd "--debug") cmd))
+  (let* ((output-buffer (get-buffer-create web-roam--orgnote-log-buffer))
+         (final-cmd (if web-roam-debug-p (concat cmd " --debug") cmd))
          (proc (progn
                  (async-shell-command cmd output-buffer output-buffer)
                  (get-buffer-process output-buffer))))
@@ -95,7 +95,7 @@ CMD - optional external command for logging."
 
 (defun web-roam--read-configurations (cmd)
   "Read config files for CMD to remote server.
-The default config file path is ~/.config/second-brain/config.json.
+The default config file path is ~/.config/orgnote/config.json.
 With next schema:
 [
   {
@@ -145,21 +145,21 @@ CMD could be publish and publish-all"
 
 ;;;###autoload
 (defun web-roam-install-dependencies ()
-  "Install necessary dependencies for second brain.
+  "Install necessary dependencies for Org Note.
 Node js 14+ version is required."
   (interactive)
-  (web-roam--execute-async-cmd "npm install -g second-brain-publisher"))
+  (web-roam--execute-async-cmd "npm install -g orgnote-cli"))
 
 ;;;###autoload
 (defun web-roam-publish-file ()
-  "Publish current opened file to second brain service."
+  "Publish current opened file to Org Note service."
   (interactive)
   (when (web-roam--org-file-p)
     (web-roam--execute-command "publish" (web-roam--normalize-path (buffer-file-name)))))
 
 ;;;###autoload
 (defun web-roam-publish-all ()
-  "Publish all files to second brain service."
+  "Publish all files to Org Note service."
   (interactive)
   (web-roam--execute-command "publish-all"))
 
@@ -171,7 +171,7 @@ Node js 14+ version is required."
 
 ;;;###autoload
 (defun web-roam-sync ()
-  "Sync all files with second brain service."
+  "Sync all files with Org Note service."
   (interactive)
   (web-roam--execute-command "sync"))
 

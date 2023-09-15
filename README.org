@@ -7,7 +7,7 @@
 
 #+html: </div>
 
-#+TITLE: ✨ Web roam. Emacs client for second brain.
+#+TITLE: ✨ Web roam. Emacs client for Org Note.
 
 #+html: <div align='center'>
 #+html: <span class='badge-buymeacoffee'>
@@ -23,13 +23,13 @@
 
 * 🌱 Introduction
 * 🍻 Connected links
-- [[https://github.com/Artawower/second-brain][Second brain service. Main repo]] 
+- [[https://github.com/Artawower/orgnote][Org Note service. Main repo]] 
 * ⚙️ Install
 ** Install dependencies
 1. [[https://docs.npmjs.com/downloading-and-installing-node-js-and-npm/][Install npm]]
-2. Install second-brain-published
+2. Install orgnote-cli
    Run `M-x web-roam-install-dependencies`
-   or `npm install -g second-brain-published`
+   or `npm install -g orgnote-cli`
 
 ** Doom
 ~package.el~
@@ -56,9 +56,11 @@
 * 👨‍🍳 Usage
 ** Variables
 ~web-roam-debug-p~ - enable debug mode for additional logging. Consider enabling the flag when you create a bug-related question
-~web-roam-configuration-file-path~ - path to the configuration file. Default is `~/.config/second-brain/config.json`
-~web-roam-execution-script~ - path to the execution script. Default is ~second-brain-publisher~
-Read more about execution script [[https://github.com/Artawower/second-brain-publisher][here]]
+~web-roam-configuration-file-path~ - path to the configuration file. Default is `~/.config/orgnote/config.json`
+~web-roam-execution-script~ - path to the execution script. Default is ~orgnote-cli~
+Read more about execution script [[https://github.com/Artawower/orgnote-cli][here]]
 * 🍩 Contribute guide
 Any contribution is very much appreciated! Please read the [[./CONTRIBUTE.org][style guide]] before contributing to avoid misunderstandings!
+
 Also, the project exists solely on donations. I would appreciate it if you would join my patreon.
+
