@@ -1,13 +1,13 @@
 :PROPERTIES:
-:ID: web-roam.el
+:ID: orgnote.el
 :END:
 
 #+html: <div align='center'>
 #+html: <img src='./images/image.png' width='256px' height='256px'>
-
 #+html: </div>
+#+html: &nbsp;
 
-#+TITLE: ✨ Web roam. Emacs client for Org Note.
+#+TITLE: ✨ Orgnote. Emacs client for Org Note.
 
 #+html: <div align='center'>
 #+html: <span class='badge-buymeacoffee'>
@@ -16,48 +16,48 @@
 #+html: <span class='badge-patreon'>
 #+html: <a href='https://patreon.com/artawower' target='_blank' title='Donate to this project using Patreon'><img src='https://img.shields.io/badge/patreon-donate-orange.svg' alt='Patreon donate button' /></a>
 #+html: </span>
-#+html: <a href='https://wakatime.com/badge/github/Artawower/web-roam.el'><img src='https://wakatime.com/badge/github/Artawower/web-roam.el.svg' alt='wakatime'></a>
-#+html: <a href='https://github.com/artawower/web-roam.el/actions/workflows/melpazoid.yml/badge.svg'><img src='https://github.com/artawower/web-roam.el/actions/workflows/melpazoid.yml/badge.svg' alt='ci' /></a>
+#+html: <a href='https://wakatime.com/badge/github/Artawower/orgnote.el'><img src='https://wakatime.com/badge/github/Artawower/orgnote.el.svg' alt='wakatime'></a>
+#+html: <a href='https://github.com/artawower/orgnote.el/actions/workflows/melpazoid.yml/badge.svg'><img src='https://github.com/artawower/orgnote.el/actions/workflows/melpazoid.yml/badge.svg' alt='ci' /></a>
 #+html: </div>
 
 
 * 🌱 Introduction
-* 🍻 Connected links
+* Connected links
 - [[https://github.com/Artawower/orgnote][Org Note service. Main repo]] 
-* ⚙️ Install
+* Install
 ** Install dependencies
 1. [[https://docs.npmjs.com/downloading-and-installing-node-js-and-npm/][Install npm]]
 2. Install orgnote-cli
-   Run `M-x web-roam-install-dependencies`
+   Run `M-x orgnote-install-dependencies`
    or `npm install -g orgnote-cli`
 
 ** Doom
 ~package.el~
 #+BEGIN_SRC emacs-lisp
 
-(package! web-roam
-  :recipe (:host github :repo "artawower/web-roam.el"))
+(package! orgnote
+  :recipe (:host github :repo "artawower/orgnote.el"))
 #+END_SRC
 ~config.el~
 
 #+BEGIN_SRC emacs-lisp
-(use-package! web-roam
+(use-package! orgnote
   :defer t
-  :hook (org-mode . web-roam-sync-mode))
+  :hook (org-mode . orgnote-sync-mode))
 #+END_SRC
 ** Straight
 #+BEGIN_SRC emacs-lisp
-(use-package web-roam
-  :straight (:host github :repo "Artawower/web-roam.el")
+(use-package orgnote
+  :straight (:host github :repo "Artawower/orgnote.el")
   :general (:states '(normal visual)
                     :keymaps 'org-mode-map
-                    "SPC np" 'web-roam-publish-file))
+                    "SPC np" 'orgnote-publish-file))
 #+END_SRC
-* 👨‍🍳 Usage
+* Usage
 ** Variables
-~web-roam-debug-p~ - enable debug mode for additional logging. Consider enabling the flag when you create a bug-related question
-~web-roam-configuration-file-path~ - path to the configuration file. Default is `~/.config/orgnote/config.json`
-~web-roam-execution-script~ - path to the execution script. Default is ~orgnote-cli~
+~orgnote-debug-p~ - enable debug mode for additional logging. Consider enabling the flag when you create a bug-related question
+~orgnote-configuration-file-path~ - path to the configuration file. Default is `~/.config/orgnote/config.json`
+~orgnote-execution-script~ - path to the execution script. Default is ~orgnote-cli~
 Read more about execution script [[https://github.com/Artawower/orgnote-cli][here]]
 * 🍩 Contribute guide
 Any contribution is very much appreciated! Please read the [[./CONTRIBUTE.org][style guide]] before contributing to avoid misunderstandings!
