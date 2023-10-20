@@ -5,7 +5,7 @@
 ;; Author: Artur Yaroshenko <artawower@protonmail.com>
 ;; URL: https://github.com/Artawower/orgnote.el
 ;; Package-Requires: ((emacs "27.1"))
-;; Version: v0.8.0
+;; Version: v0.9.0
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -130,17 +130,14 @@ CMD could be publish and publish-all"
     (orgnote--pretty-log "Configuration file %s not found" orgnote-configuration-file-path))
 
   (let* ((config (orgnote--read-configurations cmd))
-         (remote-address (gethash "remoteAddress" config))
-         (token (gethash "token" config))
-         (remote-address-cli (if remote-address (concat " --remote-address " remote-address) ""))
-         (token-cli (if token (concat " --token " token) ""))
-         (args (or args "")))
+         (account-name (gethash "name" config))
+         (args (or args ""))
+         (args (if (eq args "") "" (concat args " "))))
     (orgnote--execute-async-cmd
      (concat orgnote-execution-script
-             (format " %s %s%s %s"
+             (format " %s --accountName \"%s\" %s"
                      cmd
-                     remote-address-cli
-                     token-cli
+                     account-name
                      args)))))
 
 ;;;###autoload
