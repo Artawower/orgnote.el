@@ -5,7 +5,7 @@
 ;; Author: Artur Yaroshenko <artawower@protonmail.com>
 ;; URL: https://github.com/Artawower/orgnote.el
 ;; Package-Requires: ((emacs "27.1"))
-;; Version: v0.9.0
+;; Version: v0.10.0
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -50,6 +50,9 @@
 (defconst orgnote--available-commands '("publish" "publish-all" "load" "sync")
   "Available commands for Org Note.")
 
+(defvar orgnote-note-received-hook nil
+  "Hook run after note received from remote server.")
+
 (defun orgnote--normalize-path (path)
   "Normalize file PATH.  Shield spaces."
   (replace-regexp-in-string " " "\  " path))
@@ -58,13 +61,16 @@
   "Pretty print FORMAT-TEXT with ARGS."
   (message (concat "[orgnote.el] " format-text) args))
 
-(defun orgnote--handle-cmd-result (process signal &optional cmd)
+(defun orgnote--handle-cmd-result (process signal &optional cmd callback)
   "Handle result from shell stdout by PROCESS and SIGNAL.
 
-CMD - optional external command for logging."
+CMD - optional external command for logging.
+CALLBACK - optional callback function."
   (when (memq (process-status process) '(exit signal))
     (orgnote--pretty-log "Completely done.")
     (shell-command-sentinel process signal)
+    (when callback
+      (funcall callback))
     (when cmd
       (with-current-buffer orgnote--orgnote-log-buffer
         (setq buffer-read-only nil)
@@ -72,8 +78,9 @@ CMD - optional external command for logging."
         (insert "last command: " cmd)
         (setq buffer-read-only t)))))
 
-(defun orgnote--execute-async-cmd (cmd)
-  "Execute async CMD."
+(defun orgnote--execute-async-cmd (cmd &optional callback)
+  "Execute async CMD.
+Run CALLBACK after command execution."
   (add-to-list 'display-buffer-alist
                `(,orgnote--orgnote-log-buffer display-buffer-no-window))
 
@@ -86,7 +93,7 @@ CMD - optional external command for logging."
     (when (process-live-p proc)
       (lexical-let ((fcmd final-cmd))
         (set-process-sentinel proc (lambda (process event)
-                                     (orgnote--handle-cmd-result process event fcmd)))))))
+                                     (orgnote--handle-cmd-result process event fcmd callback)))))))
 
 (defun orgnote--org-file-p ()
   "Return t when current FILE-NAME is org file."
@@ -119,9 +126,10 @@ Also you are free to use array of such objects instead of single object."
 
       (gethash (completing-read (format "Choose server for %s: " cmd) server-names) name-to-config))))
 
-(defun orgnote--execute-command (cmd &optional args)
+(defun orgnote--execute-command (cmd &optional args callback)
   "Execute command CMD via string ARGS.
-CMD could be publish and publish-all"
+CALLBACK - optional callback function.
+Will be called after command execution."
 
   (unless (member cmd orgnote--available-commands)
     (error (format "[orgnote.el] Unknown command %s" cmd)))
@@ -138,7 +146,14 @@ CMD could be publish and publish-all"
              (format " %s --accountName \"%s\" %s"
                      cmd
                      account-name
-                     args)))))
+                     args))
+     callback)))
+
+(defun orgnote--after-receive-notes ()
+  "Run hook after receive notes from remote server."
+  (when (fboundp 'org-roam-db-sync)
+    (org-roam-db-sync))
+  (run-hooks 'orgnote-note-received-hook))
 
 ;;;###autoload
 (defun orgnote-install-dependencies ()
@@ -164,13 +179,13 @@ Node js 14+ version is required."
 (defun orgnote-load ()
   "Load notes from remote."
   (interactive)
-  (orgnote--execute-command "load"))
+  (orgnote--execute-command "load" nil #'orgnote--after-receive-notes))
 
 ;;;###autoload
 (defun orgnote-sync ()
   "Sync all files with Org Note service."
   (interactive)
-  (orgnote--execute-command "sync"))
+  (orgnote--execute-command "sync" nil #'orgnote--after-receive-notes))
 
 ;;;###autoload
 (define-minor-mode orgnote-sync-mode
