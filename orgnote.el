@@ -5,7 +5,7 @@
 ;; Author: Artur Yaroshenko <artawower@protonmail.com>
 ;; URL: https://github.com/Artawower/orgnote.el
 ;; Package-Requires: ((emacs "27.1"))
-;; Version: v0.10.0
+;; Version: v0.10.1
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -186,6 +186,12 @@ Node js 14+ version is required."
   "Sync all files with Org Note service."
   (interactive)
   (orgnote--execute-command "sync" nil #'orgnote--after-receive-notes))
+
+;;;###autoload
+(defun orgnote-force-sync ()
+  "Force sync all files with Org Note service."
+  (interactive)
+  (orgnote--execute-command "sync" "--force" #'orgnote--after-receive-notes))
 
 ;;;###autoload
 (define-minor-mode orgnote-sync-mode
