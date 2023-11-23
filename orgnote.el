@@ -5,7 +5,7 @@
 ;; Author: Artur Yaroshenko <artawower@protonmail.com>
 ;; URL: https://github.com/Artawower/orgnote.el
 ;; Package-Requires: ((emacs "27.1"))
-;; Version: v0.10.1
+;; Version: v0.10.2
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -85,9 +85,10 @@ Run CALLBACK after command execution."
                `(,orgnote--orgnote-log-buffer display-buffer-no-window))
 
   (let* ((output-buffer (get-buffer-create orgnote--orgnote-log-buffer))
-         (final-cmd (if orgnote-debug-p (concat cmd " --debug") cmd))
+         (debug-flag (if orgnote-debug-p " --debug" ""))
+         (final-cmd (if orgnote-debug-p (concat (string-trim cmd) debug-flag) cmd))
          (proc (progn
-                 (async-shell-command cmd output-buffer output-buffer)
+                 (async-shell-command final-cmd output-buffer output-buffer)
                  (get-buffer-process output-buffer))))
     
     (when (process-live-p proc)
