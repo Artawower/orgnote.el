@@ -3,7 +3,7 @@
 :END:
 
 #+html: <div align='center'>
-#+html: <img src='./images/image.png' width='256px' height='256px'>
+#+html: <img src='./images/image.webp' width='256px' height='256px'>
 #+html: </div>
 #+html: &nbsp;
 
@@ -16,25 +16,38 @@
 #+html: <span class='badge-patreon'>
 #+html: <a href='https://patreon.com/artawower' target='_blank' title='Donate to this project using Patreon'><img src='https://img.shields.io/badge/patreon-donate-orange.svg' alt='Patreon donate button' /></a>
 #+html: </span>
-#+html: <a href='https://wakatime.com/badge/github/Artawower/orgnote.el'><img src='https://wakatime.com/badge/github/Artawower/orgnote.el.svg' alt='wakatime'></a>
+#+html: <a href='https://wakatime.com/badge/github/Artawower/web-roam.el.svg'><img src='https://wakatime.com/badge/github/Artawower/orgnote.el.svg' alt='wakatime'></a>
 #+html: <a href='https://github.com/artawower/orgnote.el/actions/workflows/melpazoid.yml/badge.svg'><img src='https://github.com/artawower/orgnote.el/actions/workflows/melpazoid.yml/badge.svg' alt='ci' /></a>
+#+html: </div>
+#+html: <div align='center'>
+#+html: <a href="https://twitter.com/org_note" target="_blank"><img src="https://img.shields.io/twitter/follow/org_note" alt="Twitter link" /></a>
+#+html: <a href="https://emacs.ch/@orgnote" target="_blank"><img src="https://img.shields.io/mastodon/follow/111357296398326501?domain=https%3A%2F%2Femacs.ch" alt="Mastodon link" /></a>
+#+html: <a href="https://discord.com/invite/SFpUb2vSDm" target="_blank"><img src="https://img.shields.io/discord/1161751315324604417" alt="Discord"></a>
+#+html: </div>
+#+html: <div align='center'>
+#+html: <a href="https://play.google.com/store/apps/details?id=org.note.app" target="_blank">
+#+html: <img src="./images/google-play.svg" width="140px" height="auto">
+#+html: </a>
 #+html: </div>
 
 
 * 🌱 Introduction
+#+html: <div align='center'>
+#+html: <img src='./images/preview.webp' width='100%' height='auto'>
+#+html: </div>
+#+html: &nbsp;
 * Connected links
 - [[https://github.com/Artawower/orgnote][Org Note service. Main repo]] 
 * Install
 ** Install dependencies
 1. [[https://docs.npmjs.com/downloading-and-installing-node-js-and-npm/][Install npm]]
 2. Install orgnote-cli
-   Run `M-x orgnote-install-dependencies`
-   or `npm install -g orgnote-cli`
+   Run =M-x orgnote-install-dependencies=
+   or =npm install -g orgnote-cli=
 
 ** Doom
 ~package.el~
 #+BEGIN_SRC emacs-lisp
-
 (package! orgnote
   :recipe (:host github :repo "artawower/orgnote.el"))
 #+END_SRC
@@ -56,9 +69,13 @@
 * Usage
 ** Variables
 ~orgnote-debug-p~ - enable debug mode for additional logging. Consider enabling the flag when you create a bug-related question
+
 ~orgnote-configuration-file-path~ - path to the configuration file. Default is `~/.config/orgnote/config.json`
+
 ~orgnote-execution-script~ - path to the execution script. Default is ~orgnote-cli~
-Read more about execution script [[https://github.com/Artawower/orgnote-cli][here]]
+
+** Configuraiton
+Read more about CLI tool [[https://github.com/Artawower/orgnote-cli][here]]
 * 🍩 Contribute guide
 Any contribution is very much appreciated! Please read the [[./CONTRIBUTE.org][style guide]] before contributing to avoid misunderstandings!
 

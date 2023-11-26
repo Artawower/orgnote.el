@@ -1,11 +1,10 @@
-;; orgnote.el --- Package for synchronization with orgnote           -*- lexical-binding: t; -*-
-
-;; Copyright (C) 2022 Artur Yaroshenko
+;;; orgnote.el --- Show git blame info about current line           -*- lexical-binding: t; -*-
 
 ;; Author: Artur Yaroshenko <artawower@protonmail.com>
 ;; URL: https://github.com/Artawower/orgnote.el
 ;; Package-Requires: ((emacs "27.1"))
-;; Version: v0.10.2
+;; Version: 0.10.2
+;; Copyright (C) 2023 Artur Yaroshenko
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -24,10 +23,11 @@
 ;; This package provides functionality for syncing org roam notes with external service - Org Note
 ;; For more detail check https://github.com/Artawower/orgnote project.
 ;; This is an early alpha version of this app, it may have many bugs and problems, try to back up your notes before using it.
+
 ;;; Code:
 
 (require 'json)
-(require 'cl)
+(require 'cl-lib)
 
 (defcustom orgnote-execution-script "orgnote-cli"
   "Bin command from cli to execute external script."
@@ -196,7 +196,7 @@ Node js 14+ version is required."
 
 ;;;###autoload
 (define-minor-mode orgnote-sync-mode
-  "Orgnote syncing mode.
+  "OrgNote syncing mode.
 Interactively with no argument, this command toggles the mode.
 A positive prefix argument enables the mode, any other prefix
 argument disables it.  From Lisp, argument omitted or nil enables
