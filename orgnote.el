@@ -27,7 +27,7 @@
 ;;; Code:
 
 (require 'json)
-(require 'cl-lib)
+(eval-when-compile (require 'cl))
 
 (defcustom orgnote-execution-script "orgnote-cli"
   "Bin command from cli to execute external script."
