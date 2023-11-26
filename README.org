@@ -7,7 +7,7 @@
 #+html: </div>
 #+html: &nbsp;
 
-#+TITLE: ✨ Orgnote. Emacs client for Org Note.
+#+TITLE: ✨ OrgNote.el
 
 #+html: <div align='center'>
 #+html: <span class='badge-buymeacoffee'>
@@ -31,13 +31,16 @@
 #+html: </div>
 
 
-* 🌱 Introduction
+* Introduction
+orgnote.el is a package for synchronizing your org roam notes, or just org files with property id from emacs with an external application - [[https://org-note.com][orgnote]] and vice versa.
+For correct usage you need to have API and activation key
 #+html: <div align='center'>
 #+html: <img src='./images/preview.webp' width='100%' height='auto'>
 #+html: </div>
 #+html: &nbsp;
+
 * Connected links
-- [[https://github.com/Artawower/orgnote][Org Note service. Main repo]] 
+- [[https://github.com/Artawower/orgnote][OrgNote app. Main repo]] 
 * Install
 ** Install dependencies
 1. [[https://docs.npmjs.com/downloading-and-installing-node-js-and-npm/][Install npm]]
