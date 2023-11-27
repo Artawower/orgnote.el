@@ -27,7 +27,6 @@
 ;;; Code:
 
 (require 'json)
-(eval-when-compile (require 'cl))
 
 (defcustom orgnote-execution-script "orgnote-cli"
   "Bin command from cli to execute external script."
@@ -92,9 +91,8 @@ Run CALLBACK after command execution."
                  (get-buffer-process output-buffer))))
     
     (when (process-live-p proc)
-      (lexical-let ((fcmd final-cmd))
-        (set-process-sentinel proc (lambda (process event)
-                                     (orgnote--handle-cmd-result process event fcmd callback)))))))
+      (set-process-sentinel proc (lambda (process event)
+                                   (orgnote--handle-cmd-result process event final-cmd callback))))))
 
 (defun orgnote--org-file-p ()
   "Return t when current FILE-NAME is org file."
@@ -141,7 +139,7 @@ Will be called after command execution."
   (let* ((config (orgnote--read-configurations cmd))
          (account-name (gethash "name" config))
          (args (or args ""))
-         (args (if (eq args "") "" (concat args " "))))
+         (args (if (string-empty-p args) "" (concat args " "))))
     (orgnote--execute-async-cmd
      (concat orgnote-execution-script
              (format " %s --accountName \"%s\" %s"
