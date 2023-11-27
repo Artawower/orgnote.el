@@ -139,7 +139,7 @@ Will be called after command execution."
   (let* ((config (orgnote--read-configurations cmd))
          (account-name (gethash "name" config))
          (args (or args ""))
-         (args (if (eq args "") "" (concat args " "))))
+         (args (if (string-empty-p args) "" (concat args " "))))
     (orgnote--execute-async-cmd
      (concat orgnote-execution-script
              (format " %s --accountName \"%s\" %s"
