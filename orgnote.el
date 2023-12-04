@@ -1,4 +1,4 @@
-;;; orgnote.el --- Show git blame info about current line           -*- lexical-binding: t; -*-
+;;; orgnote.el --- Sync org roam notes with OrgNote app           -*- lexical-binding: t; -*-
 
 ;; Author: Artur Yaroshenko <artawower@protonmail.com>
 ;; URL: https://github.com/Artawower/orgnote.el
@@ -20,9 +20,9 @@
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-;; This package provides functionality for syncing org roam notes with external service - Org Note
+;; This package provides functionality for syncing org roam notes and plain org
+;; files with external app - OrgNote and vice versa.
 ;; For more detail check https://github.com/Artawower/orgnote project.
-;; This is an early alpha version of this app, it may have many bugs and problems, try to back up your notes before using it.
 
 ;;; Code:
 
@@ -131,7 +131,7 @@ CALLBACK - optional callback function.
 Will be called after command execution."
 
   (unless (member cmd orgnote--available-commands)
-    (error (format "[orgnote.el] Unknown command %s" cmd)))
+    (error "[orgnote.el] Unknown command %s" cmd))
 
   (unless (file-exists-p orgnote-configuration-file-path)
     (orgnote--pretty-log "Configuration file %s not found" orgnote-configuration-file-path))
