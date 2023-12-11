@@ -10,12 +10,7 @@
 #+TITLE: ✨ OrgNote.el
 
 #+html: <div align='center'>
-#+html: <span class='badge-buymeacoffee'>
-#+html: <a href='https://www.paypal.me/darkawower' title='Paypal' target='_blank'><img src='https://img.shields.io/badge/paypal-donate-blue.svg' alt='Buy Me A Coffee donate button' /></a>
-#+html: </span>
-#+html: <span class='badge-patreon'>
-#+html: <a href='https://patreon.com/artawower' target='_blank' title='Donate to this project using Patreon'><img src='https://img.shields.io/badge/patreon-donate-orange.svg' alt='Patreon donate button' /></a>
-#+html: </span>
+#+html: <a href="https://melpa.org/#/orgnote"><img alt="MELPA" src="https://melpa.org/packages/orgnote-badge.svg"/></a>
 #+html: <a href='https://wakatime.com/badge/github/Artawower/web-roam.el.svg'><img src='https://wakatime.com/badge/github/Artawower/orgnote.el.svg' alt='wakatime'></a>
 #+html: <a href='https://github.com/artawower/orgnote.el/actions/workflows/melpazoid.yml/badge.svg'><img src='https://github.com/artawower/orgnote.el/actions/workflows/melpazoid.yml/badge.svg' alt='ci' /></a>
 #+html: </div>
@@ -23,6 +18,14 @@
 #+html: <a href="https://twitter.com/org_note" target="_blank"><img src="https://img.shields.io/twitter/follow/org_note" alt="Twitter link" /></a>
 #+html: <a href="https://emacs.ch/@orgnote" target="_blank"><img src="https://img.shields.io/mastodon/follow/111357296398326501?domain=https%3A%2F%2Femacs.ch" alt="Mastodon link" /></a>
 #+html: <a href="https://discord.com/invite/SFpUb2vSDm" target="_blank"><img src="https://img.shields.io/discord/1161751315324604417" alt="Discord"></a>
+#+html: </div>
+#+html: <div align='center'>
+#+html: <span class='badge-buymeacoffee'>
+#+html: <a href='https://www.paypal.me/darkawower' title='Paypal' target='_blank'><img src='https://img.shields.io/badge/paypal-donate-blue.svg' alt='Buy Me A Coffee donate button' /></a>
+#+html: </span>
+#+html: <span class='badge-patreon'>
+#+html: <a href='https://patreon.com/artawower' target='_blank' title='Donate to this project using Patreon'><img src='https://img.shields.io/badge/patreon-donate-orange.svg' alt='Patreon donate button' /></a>
+#+html: </span>
 #+html: </div>
 #+html: <div align='center'>
 #+html: <a href="https://play.google.com/store/apps/details?id=org.note.app" target="_blank">
@@ -64,7 +67,6 @@ For correct usage you need to have API and activation key
 ** Straight
 #+BEGIN_SRC emacs-lisp
 (use-package orgnote
-  :straight (:host github :repo "Artawower/orgnote.el")
   :general (:states '(normal visual)
                     :keymaps 'org-mode-map
                     "SPC np" 'orgnote-publish-file))
