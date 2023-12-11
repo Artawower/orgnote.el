@@ -32,7 +32,7 @@
 
 
 * Introduction
-orgnote.el is a package for synchronizing your org roam notes, or just org files with property id from emacs with an external application - [[https://org-note.com][orgnote]] and vice versa.
+orgnote.el is a package for synchronizing your org-roam notes, or just org files with property id from emacs with an external application - [[https://org-note.com][orgnote]] and vice versa.
 For correct usage you need to have API and activation key
 #+html: <div align='center'>
 #+html: <img src='./images/preview.webp' width='100%' height='auto'>

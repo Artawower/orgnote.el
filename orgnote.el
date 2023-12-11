@@ -1,9 +1,9 @@
-;;; orgnote.el --- Sync org roam notes with OrgNote app           -*- lexical-binding: t; -*-
+;;; orgnote.el --- Sync org-roam notes with OrgNote app           -*- lexical-binding: t; -*-
 
 ;; Author: Artur Yaroshenko <artawower@protonmail.com>
 ;; URL: https://github.com/Artawower/orgnote.el
 ;; Package-Requires: ((emacs "27.1"))
-;; Version: 0.10.2
+;; Version: 0.10.3
 ;; Copyright (C) 2023 Artur Yaroshenko
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -20,13 +20,17 @@
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-;; This package provides functionality for syncing org roam notes and plain org
+;; This package provides functionality for syncing org-roam notes and plain org
 ;; files with external app - OrgNote and vice versa.
 ;; For more detail check https://github.com/Artawower/orgnote project.
 
 ;;; Code:
 
 (require 'json)
+
+(defgroup orgnote nil
+  "Sync org-roam notes with OrgNote app."
+  :group 'org)
 
 (defcustom orgnote-execution-script "orgnote-cli"
   "Bin command from cli to execute external script."
