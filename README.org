@@ -79,6 +79,8 @@ For correct usage you need to have API and activation key
 
 ~orgnote-execution-script~ - path to the execution script. Default is ~orgnote-cli~
 
+=orgnote-enable-roam-sync-p= - enable org-roam sync. Default is =nil=
+
 ** Configuraiton
 Read more about CLI tool [[https://github.com/Artawower/orgnote-cli][here]]
 * 🍩 Contribute guide

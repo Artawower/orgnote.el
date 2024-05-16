@@ -3,7 +3,7 @@
 ;; Author: Artur Yaroshenko <artawower@protonmail.com>
 ;; URL: https://github.com/Artawower/orgnote.el
 ;; Package-Requires: ((emacs "27.1"))
-;; Version: 0.10.3
+;; Version: 0.10.4
 ;; Copyright (C) 2023 Artur Yaroshenko
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -52,6 +52,9 @@
 
 (defconst orgnote--available-commands '("publish" "publish-all" "load" "sync")
   "Available commands for Org Note.")
+
+(defconst orgnote-enable-roam-sync-p nil
+  "Execute `org-roam-db-sync' after note received from remote server.")
 
 (defvar orgnote-note-received-hook nil
   "Hook run after note received from remote server.")
@@ -154,7 +157,7 @@ Will be called after command execution."
 
 (defun orgnote--after-receive-notes ()
   "Run hook after receive notes from remote server."
-  (when (fboundp 'org-roam-db-sync)
+  (when (and orgnote-enable-roam-sync-p (fboundp 'org-roam-db-sync))
     (org-roam-db-sync))
   (run-hooks 'orgnote-note-received-hook))
 
