@@ -75,7 +75,7 @@ For correct usage you need to have API and activation key
 ** Variables
 ~orgnote-debug-p~ - enable debug mode for additional logging. Consider enabling the flag when you create a bug-related question
 
-~orgnote-configuration-file-path~ - path to the configuration file. Default is `~/.config/orgnote/config.json`
+~orgnote-configuration-file-path~ - path to the configuration file. Default is `~/.config/orgnote/config.toml` (JSON is deprecated)
 
 ~orgnote-execution-script~ - path to the execution script. Default is ~orgnote-cli~
 
@@ -83,8 +83,24 @@ For correct usage you need to have API and activation key
 
 ** Configuraiton
 Read more about CLI tool [[https://github.com/Artawower/orgnote-cli][here]]
+
+Example `config.toml`:
+#+BEGIN_SRC toml
+[[root]]
+name = "personal"
+remoteAddress = "https://org-note.com"
+token = "your-token"
+#+END_SRC
+
+TOML parsing uses `tomlparse` (tree-sitter). This requires Emacs 29.1+ and the TOML grammar installed:
+#+BEGIN_SRC emacs-lisp
+(add-to-list
+ 'treesit-language-source-alist
+ '(toml "https://github.com/tree-sitter-grammars/tree-sitter-toml"))
+(unless (treesit-language-available-p 'toml)
+  (treesit-install-language-grammar 'toml))
+#+END_SRC
 * 🍩 Contribute guide
 Any contribution is very much appreciated! Please read the [[./CONTRIBUTE.org][style guide]] before contributing to avoid misunderstandings!
 
 Also, the project exists solely on donations. I would appreciate it if you would join my patreon.
-
