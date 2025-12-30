@@ -236,7 +236,7 @@ Will be called after command execution."
          (args (if (string-empty-p args) "" (concat args " "))))
     (orgnote--execute-async-cmd
      (concat orgnote-execution-script
-             (format " %s --accountName \"%s\" %s"
+             (format " %s --account \"%s\" %s"
                      cmd
                      account-name
                      args))
