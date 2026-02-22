@@ -62,14 +62,15 @@ For correct usage you need to have API and activation key
 #+BEGIN_SRC emacs-lisp
 (use-package! orgnote
   :defer t
-  :hook (org-mode . orgnote-sync-mode))
+  :config
+  (orgnote-autosync-global-mode 1))
 #+END_SRC
 ** Straight
 #+BEGIN_SRC emacs-lisp
 (use-package orgnote
   :general (:states '(normal visual)
                     :keymaps 'org-mode-map
-                    "SPC np" 'orgnote-publish-file))
+                    "SPC ns" 'orgnote-sync))
 #+END_SRC
 * Usage
 ** Variables

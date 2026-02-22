@@ -3,7 +3,7 @@
 ;; Author: Artur Yaroshenko <artawower@protonmail.com>
 ;; URL: https://github.com/Artawower/orgnote.el
 ;; Package-Requires: ((emacs "29.1") (tomlparse "1.0.0"))
-;; Version: 0.13.0
+;; Version: 0.14.0
 ;; Copyright (C) 2023 Artur Yaroshenko
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -51,8 +51,8 @@
 (defconst orgnote--orgnote-log-buffer "*Orgnote. Org Note log*"
   "The name of Org Note buffer that run in background.")
 
-(defconst orgnote--available-commands '("publish" "publish-all" "load" "sync" "repair")
-  "Available commands for Org Note.")
+(defconst orgnote--available-commands '("sync" "validate-config")
+  "Available commands for orgnote-cli.")
 
 (defconst orgnote-share-command "preview note"
   "Command to execute in OrgNote for sharing content.")
@@ -63,47 +63,85 @@
 (defvar orgnote-note-received-hook nil
   "Hook run after note received from remote server.")
 
-(defun orgnote--normalize-path (path)
-  "Normalize file PATH.  Shield spaces."
-  (replace-regexp-in-string " " "\  " path))
+(defvar orgnote-after-sync-hook nil
+  "Hook run after autosync completes successfully.
+Functions in this hook are called with no arguments.")
+
+(defvar orgnote--autosync-process nil
+  "Current autosync process or nil if none running.")
+
+(defvar orgnote--autosync-timer nil
+  "Timer used for debouncing autosync triggers.")
+
+(defcustom orgnote-autosync-delay 1.0
+  "Seconds to wait after save before triggering autosync.
+This debounce prevents multiple syncs during rapid saves."
+  :type 'float
+  :group 'orgnote)
 
 (defun orgnote--pretty-log (format-text &rest args)
   "Pretty print FORMAT-TEXT with ARGS."
   (message (concat "[orgnote.el] " format-text) args))
 
-(defun orgnote--handle-cmd-result (process signal &optional cmd callback)
+(defconst orgnote--config-parsers
+  '(("toml" . orgnote--parse-toml-config)
+    ("json" . orgnote--parse-json-config))
+  "Alist mapping file extensions to config parser functions.")
+
+(defun orgnote--parse-config-file (path)
+  "Parse configuration file at PATH using appropriate parser based on extension."
+  (let* ((ext (orgnote--config-file-extension path))
+         (parser (alist-get ext orgnote--config-parsers nil nil #'string=)))
+    (unless parser
+      (user-error "[orgnote.el] Unsupported configuration format: %s" ext))
+    (when (and (string= ext "json")
+               (file-exists-p path))
+      (orgnote--pretty-log "Configuration file %s uses deprecated JSON format" path))
+    (funcall parser path)))
+
+(defun orgnote--split-execution-script ()
+  "Split orgnote-execution-script into program and base arguments list.
+Handles cases like 'bun run orgnote-cli' correctly."
+  (if (string-match-p " " orgnote-execution-script)
+      (split-string-and-unquote orgnote-execution-script)
+    (list orgnote-execution-script)))
+
+(defun orgnote--handle-cmd-result (process signal &optional args callback)
   "Handle result from shell stdout by PROCESS and SIGNAL.
 
-CMD - optional external command for logging.
+ARGS - plist with :command for logging.
 CALLBACK - optional callback function."
   (when (memq (process-status process) '(exit signal))
     (orgnote--pretty-log "Completely done.")
     (shell-command-sentinel process signal)
     (when callback
       (funcall callback))
-    (when cmd
+    (when args
       (with-current-buffer orgnote--orgnote-log-buffer
         (setq buffer-read-only nil)
         (goto-char (point-max))
-        (insert "last command: " cmd)
+        (insert "last command: " (string-join (plist-get args :command) " "))
         (setq buffer-read-only t)))))
 
-(defun orgnote--execute-async-cmd (cmd &optional callback)
-  "Execute async CMD.
-Run CALLBACK after command execution."
+(defun orgnote--execute-async-cmd (program args &optional callback)
+  "Execute PROGRAM with ARGS asynchronously.
+CALLBACK is invoked after command completion.
+Uses make-process to avoid shell injection."
   (add-to-list 'display-buffer-alist
                `(,orgnote--orgnote-log-buffer display-buffer-no-window))
-
   (let* ((output-buffer (get-buffer-create orgnote--orgnote-log-buffer))
-         (debug-flag (if orgnote-debug-p " --debug" ""))
-         (final-cmd (if orgnote-debug-p (concat (string-trim cmd) debug-flag) cmd))
-         (proc (progn
-                 (async-shell-command final-cmd output-buffer output-buffer)
-                 (get-buffer-process output-buffer))))
-    
-    (when (process-live-p proc)
-      (set-process-sentinel proc (lambda (process event)
-                                   (orgnote--handle-cmd-result process event final-cmd callback))))))
+         (full-args (if orgnote-debug-p
+                        (append args '("--debug"))
+                      args)))
+    (make-process
+     :name "orgnote-cmd"
+     :buffer output-buffer
+     :command (cons program full-args)
+     :sentinel (lambda (process event)
+                 (orgnote--handle-cmd-result process event
+                                             (list :command (cons program full-args))
+                                             callback))
+     :noquery t)))
 
 (defun orgnote--org-file-p ()
   "Return t when current FILE-NAME is org file."
@@ -182,114 +220,146 @@ Run CALLBACK after command execution."
   "Parse TOML config at PATH."
   (if (fboundp 'tomlparse-file)
       (tomlparse-file path)
-    (error "[orgnote.el] TOML parser not available; install tomlparse and TOML tree-sitter grammar")))
+    (user-error "[orgnote.el] TOML parser not available; install tomlparse and TOML tree-sitter grammar")))
 
-(defun orgnote--read-configurations (cmd)
-  "Read config files for CMD to remote server.
-The default config file path is ~/.config/orgnote/config.toml.
-JSON format is deprecated; TOML is preferred.
-JSON schema:
-[
-  {
-    \"name\": \"any alias for pretty output\",
-    \"remoteAddress\": \"backend API server address\",
-    \"clientAddress\": \"frontend client address
-    \ (optional, for preview commands)\",
-    \"token\": \"token (should be generated by remote server)\"
-  }
-Also you are free to use array of such objects instead of single object."
-  (let* ((config-ext (orgnote--config-file-extension orgnote-configuration-file-path))
-         (raw-config (cond
-                      ((string= config-ext "toml")
-                       (orgnote--parse-toml-config orgnote-configuration-file-path))
-                      ((string= config-ext "json")
-                       (orgnote--pretty-log "Configuration file %s uses deprecated JSON format and will be removed. Please migrate to TOML."
-                                            orgnote-configuration-file-path)
-                       (orgnote--parse-json-config orgnote-configuration-file-path))
-                      (t (error "[orgnote.el] Unsupported configuration format: %s"
-                                orgnote-configuration-file-path))))
-         (configs (orgnote--config-list-from-raw raw-config))
+(defun orgnote--read-all-configs ()
+  "Return list of all configured accounts without prompting."
+  (let ((raw-config (orgnote--parse-config-file orgnote-configuration-file-path)))
+    (orgnote--config-list-from-raw raw-config)))
+
+(defun orgnote--get-config-for-file (file-path)
+  "Return configuration whose rootFolder contains FILE-PATH.
+Returns nil if no matching configuration found."
+  (seq-find (lambda (config)
+              (when-let ((root (orgnote--config-get "rootFolder" config)))
+                (file-in-directory-p file-path root)))
+            (orgnote--read-all-configs)))
+
+(defun orgnote--file-in-config-dir-p ()
+  "Return non-nil if current buffer file is in any configured rootFolder."
+  (when-let ((file (buffer-file-name)))
+    (orgnote--get-config-for-file file)))
+
+(defun orgnote--autosync-cancel-timer ()
+  "Cancel pending autosync timer if any."
+  (when (timerp orgnote--autosync-timer)
+    (cancel-timer orgnote--autosync-timer)
+    (setq orgnote--autosync-timer nil)))
+
+(defun orgnote--autosync-cancel-process ()
+  "Kill running autosync process if any."
+  (when (process-live-p orgnote--autosync-process)
+    (delete-process orgnote--autosync-process))
+  (setq orgnote--autosync-process nil))
+
+(defun orgnote--autosync-sentinel (process _event)
+  "Handle autosync PROCESS completion."
+  (when (memq (process-status process) '(exit signal))
+    (setq orgnote--autosync-process nil)
+    (when (eq (process-status process) 'exit)
+      (run-hooks 'orgnote-after-sync-hook))))
+
+(defun orgnote--prepare-log-buffer ()
+  "Prepare log buffer for new output, preventing unbounded growth."
+  (let ((buffer (get-buffer-create orgnote--orgnote-log-buffer)))
+    (with-current-buffer buffer
+      (erase-buffer))
+    buffer))
+
+(defun orgnote--autosync-execute (config)
+  "Execute sync for CONFIG, killing any previous process.
+Uses make-process to avoid shell injection vulnerabilities."
+  (let ((account-name (orgnote--config-get "name" config)))
+    (orgnote--autosync-cancel-process)
+    (let* ((log-buffer (orgnote--prepare-log-buffer))
+           (script-parts (orgnote--split-execution-script))
+           (program (car script-parts))
+           (base-args (cdr script-parts))
+           (args (append base-args (list "sync" (concat "--account=" account-name)))))
+      (when orgnote-debug-p
+        (setq args (append args '("--debug"))))
+      (setq orgnote--autosync-process
+            (make-process
+             :name "orgnote-autosync"
+             :buffer log-buffer
+             :command (cons program args)
+             :sentinel #'orgnote--autosync-sentinel
+             :noquery t)))))
+
+(defun orgnote--autosync-trigger ()
+  "Trigger debounced autosync for current buffer's account."
+  (when-let* ((file (buffer-file-name))
+              (config (orgnote--get-config-for-file file)))
+    (orgnote--autosync-cancel-timer)
+    (setq orgnote--autosync-timer
+          (run-with-idle-timer orgnote-autosync-delay nil
+                               #'orgnote--autosync-execute config))))
+
+(defun orgnote--get-config-with-context (&optional context)
+  "Get config automatically based on current buffer file or prompt.
+If current buffer file matches a rootFolder, use that config.
+Otherwise, if single config exists, use it.
+CONTEXT is used for prompting if needed."
+  (or (orgnote--file-in-config-dir-p)
+      (let ((configs (orgnote--read-all-configs)))
+        (if (= (length configs) 1)
+            (car configs)
+          (orgnote--prompt-for-config (or context "operation"))))))
+
+(defun orgnote--prompt-for-config (context)
+  "Prompt user to select a config for CONTEXT."
+  (let* ((configs (orgnote--read-all-configs))
          (name-to-config (make-hash-table :test 'equal))
          (server-names '()))
+    (dolist (conf configs)
+      (let ((name (orgnote--config-get "name" conf)))
+        (when name
+          (puthash name conf name-to-config)
+          (push name server-names))))
+    (gethash (completing-read (format "Choose account for %s: " context)
+                              (nreverse server-names))
+             name-to-config)))
 
-    (if (= (length configs) 1)
-        (car configs)
-      (dolist (conf configs)
-        (let ((name (orgnote--config-get "name" conf)))
-          (when name
-            (puthash name conf name-to-config)
-            (push name server-names))))
-
-      (gethash (completing-read (format "Choose server for %s: " cmd)
-                                (nreverse server-names))
-               name-to-config))))
-
-(defun orgnote--execute-command (cmd &optional args callback)
-  "Execute command CMD via string ARGS.
-CALLBACK - optional callback function.
-Will be called after command execution."
-
-  (unless (member cmd orgnote--available-commands)
-    (error "[orgnote.el] Unknown command %s" cmd))
-
+(defun orgnote--execute-sync-command (&optional args callback)
+  "Execute sync command with optional ARGS.
+Auto-selects config based on current buffer file path.
+CALLBACK is invoked after command completion."
   (unless (file-exists-p orgnote-configuration-file-path)
-    (orgnote--pretty-log "Configuration file %s not found" orgnote-configuration-file-path))
-
-  (let* ((config (orgnote--read-configurations cmd))
+    (user-error "[orgnote.el] Configuration file %s not found" orgnote-configuration-file-path))
+  (let* ((config (orgnote--get-config-with-context "sync"))
          (account-name (orgnote--config-get "name" config))
-         (args (or args ""))
-         (args (if (string-empty-p args) "" (concat args " "))))
-    (orgnote--execute-async-cmd
-     (concat orgnote-execution-script
-             (format " %s --account \"%s\" %s"
-                     cmd
-                     account-name
-                     args))
-     callback)))
+         (script-parts (orgnote--split-execution-script))
+         (program (car script-parts))
+         (base-args (cdr script-parts))
+         (normalized-args (if (listp args) args (when args (list args))))
+         (full-args (append base-args (list "sync" (concat "--account=" account-name)) normalized-args)))
+    (orgnote--execute-async-cmd program full-args callback)))
 
 (defun orgnote--after-receive-notes ()
-  "Run hook after receive notes from remote server."
+  "Run hook after sync completes."
   (when (and orgnote-enable-roam-sync-p (fboundp 'org-roam-db-sync))
     (org-roam-db-sync))
   (run-hooks 'orgnote-note-received-hook))
 
 ;;;###autoload
 (defun orgnote-install-dependencies ()
-  "Install necessary dependencies for Org Note.
-Node js 14+ version is required."
+  "Install orgnote-cli globally using bun."
   (interactive)
-  (orgnote--execute-async-cmd "npm install -g orgnote-cli"))
-
-;;;###autoload
-(defun orgnote-publish-file ()
-  "Publish current opened file to Org Note service."
-  (interactive)
-  (when (orgnote--org-file-p)
-    (orgnote--execute-command "publish" (orgnote--normalize-path (buffer-file-name)))))
-
-;;;###autoload
-(defun orgnote-publish-all ()
-  "Publish all files to Org Note service."
-  (interactive)
-  (orgnote--execute-command "publish-all"))
-
-;;;###autoload
-(defun orgnote-load ()
-  "Load notes from remote."
-  (interactive)
-  (orgnote--execute-command "load" nil #'orgnote--after-receive-notes))
+  (orgnote--execute-async-cmd "bun" '("install" "-g" "orgnote-cli")))
 
 ;;;###autoload
 (defun orgnote-sync ()
-  "Sync all files with Org Note service."
+  "Sync all files with Org Note service.
+Auto-selects account based on current buffer file path."
   (interactive)
-  (orgnote--execute-command "sync" nil #'orgnote--after-receive-notes))
+  (orgnote--execute-sync-command nil #'orgnote--after-receive-notes))
 
 ;;;###autoload
 (defun orgnote-force-sync ()
-  "Force sync all files with Org Note service."
+  "Force sync all files with Org Note service.
+Clears cache before sync."
   (interactive)
-  (orgnote--execute-command "sync" "--force" #'orgnote--after-receive-notes))
+  (orgnote--execute-sync-command "--force" #'orgnote--after-receive-notes))
 
 ;;;###autoload
 (defun orgnote-open-configuration ()
@@ -299,19 +369,21 @@ Node js 14+ version is required."
 
 ;;;###autoload
 (defun orgnote-open-cache-store ()
-  "Open cache store for Org Note."
+  "Open cache store for Org Note.
+Auto-selects account based on current buffer file path."
   (interactive)
-  (let* ((config (orgnote--read-configurations "reading configuration"))
+  (let* ((config (orgnote--get-config-with-context "reading cache"))
          (account-name (orgnote--config-get "name" config)))
     (find-file (format "~/.config/orgnote/store-%s.json" account-name))))
 
 (defun orgnote--get-orgnote-url ()
-  "Get the OrgNote frontend URL from the configuration."
-  (let* ((config (orgnote--read-configurations "preview"))
+  "Get the OrgNote frontend URL from the configuration.
+Auto-selects account based on current buffer file path."
+  (let* ((config (orgnote--get-config-with-context "preview"))
          (client-address (orgnote--config-get "clientAddress" config)))
     (if client-address
         client-address
-      (error "[orgnote.el] clientAddress must be configured in config file"))))
+      (user-error "[orgnote.el] clientAddress must be configured in config file"))))
 
 (defun orgnote--build-preview-url (content)
   "Build the preview URL for CONTENT."
@@ -350,23 +422,34 @@ Opens the buffer content in OrgNote using the preview note command."
     (error (orgnote--pretty-log "Failed to share region: %s" (error-message-string err)))))
 
 ;;;###autoload
-(define-minor-mode orgnote-sync-mode
-  "OrgNote syncing mode.
-Interactively with no argument, this command toggles the mode.
-A positive prefix argument enables the mode, any other prefix
-argument disables it.  From Lisp, argument omitted or nil enables
-the mode, `toggle' toggles the state.
+(define-minor-mode orgnote-autosync-mode
+  "Automatically sync org files with OrgNote on save.
 
-When `orgnote-sync-mode' is enabled, after save org mode files will
-be synced with remote service."
+When enabled for a buffer, triggers sync after each save if the
+file is located within a configured rootFolder. Uses debouncing
+to prevent excessive sync operations during rapid saves.
+
+The hook `orgnote-after-sync-hook' runs after each successful sync."
   :init-value nil
-  :global nil
-  :lighter nil
+  :local t
+  :lighter " OrgNote"
   :group 'orgnote
-  (if orgnote-sync-mode
-      (when (orgnote--org-file-p)
-        (add-hook 'before-save-hook #'orgnote-publish-file nil t))
-    (remove-hook 'before-save-hook #'orgnote-publish-file t)))
+  (if orgnote-autosync-mode
+      (add-hook 'after-save-hook #'orgnote--autosync-trigger nil t)
+    (remove-hook 'after-save-hook #'orgnote--autosync-trigger t)
+    (orgnote--autosync-cancel-timer)))
+
+(defun orgnote-autosync--maybe-enable ()
+  "Enable `orgnote-autosync-mode' if current buffer qualifies."
+  (when (and (orgnote--org-file-p)
+             (orgnote--file-in-config-dir-p))
+    (orgnote-autosync-mode 1)))
+
+;;;###autoload
+(define-globalized-minor-mode orgnote-autosync-global-mode
+  orgnote-autosync-mode
+  orgnote-autosync--maybe-enable
+  :group 'orgnote)
 
 (provide 'orgnote)
 ;;; orgnote.el ends here
