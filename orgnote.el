@@ -2,7 +2,7 @@
 
 ;; Author: Artur Yaroshenko <artawower@protonmail.com>
 ;; URL: https://github.com/Artawower/orgnote.el
-;; Package-Requires: ((emacs "29.1") (tomlparse "1.0.0"))
+;; Package-Requires: ((emacs "29.1") (tomlparse "1.0.0") (websocket "1.15"))
 ;; Version: 0.14.0
 ;; Copyright (C) 2023 Artur Yaroshenko
 
@@ -28,6 +28,8 @@
 
 (require 'json)
 (require 'tomlparse)
+(require 'cl-lib)
+(require 'websocket)
 
 (defgroup orgnote nil
   "Sync org-roam notes with OrgNote app."
@@ -73,6 +75,36 @@ Functions in this hook are called with no arguments.")
 (defvar orgnote--autosync-timer nil
   "Timer used for debouncing autosync triggers.")
 
+(defconst orgnote--config-key-name "name"
+  "Config key for account name.")
+
+(defconst orgnote--config-key-token "token"
+  "Config key for API token.")
+
+(defconst orgnote--config-key-remote "remoteAddress"
+  "Config key for remote server address.")
+
+(defconst orgnote--config-key-root "rootFolder"
+  "Config key for root folder path.")
+
+(defconst orgnote--config-key-client "clientAddress"
+  "Config key for client/frontend address.")
+
+(defvar orgnote--ws-connections (make-hash-table :test 'equal)
+  "Hash table mapping account names to connection plists.
+Each entry is (:ws <connection> :config <config-hashtable>).")
+
+(defvar orgnote--ws-reverse-map (make-hash-table :test 'eq)
+  "Hash table mapping websocket objects to account names for O(1) lookup.")
+
+(defvar orgnote--ws-reconnect-timers (make-hash-table :test 'equal)
+  "Hash table mapping account names to reconnect timers.")
+
+(defcustom orgnote-ws-reconnect-delay 5
+  "Seconds to wait before reconnecting WebSocket after disconnect."
+  :type 'integer
+  :group 'orgnote)
+
 (defcustom orgnote-autosync-delay 1.0
   "Seconds to wait after save before triggering autosync.
 This debounce prevents multiple syncs during rapid saves."
@@ -81,7 +113,7 @@ This debounce prevents multiple syncs during rapid saves."
 
 (defun orgnote--pretty-log (format-text &rest args)
   "Pretty print FORMAT-TEXT with ARGS."
-  (message (concat "[orgnote.el] " format-text) args))
+  (apply #'message (concat "[orgnote.el] " format-text) args))
 
 (defconst orgnote--config-parsers
   '(("toml" . orgnote--parse-toml-config)
@@ -154,16 +186,22 @@ Uses make-process to avoid shell injection."
 
 (defun orgnote--config-get (key config)
   "Get KEY from CONFIG, supporting hash tables and alists."
-  (cond
-   ((hash-table-p config)
-    (or (gethash key config)
-        (gethash (intern key) config)))
-   ((listp config)
-    (or (condition-case nil
-            (alist-get key config nil nil #'string=)
-          (wrong-type-argument nil))
-        (alist-get (intern key) config)))
-   (t nil)))
+  (let ((raw-value (cond
+                    ((hash-table-p config)
+                     (or (gethash key config)
+                         (gethash (intern key) config)))
+                    ((listp config)
+                     (or (condition-case nil
+                             (alist-get key config nil nil #'string=)
+                           (wrong-type-argument nil))
+                         (alist-get (intern key) config)))
+                    (t nil))))
+    (cond
+     ((and (vectorp raw-value) (= (length raw-value) 1))
+      (aref raw-value 0))
+     ((and (listp raw-value) (= (length raw-value) 1) (stringp (car raw-value)))
+      (car raw-value))
+     (t raw-value))))
 
 (defun orgnote--ensure-list (value)
   "Ensure VALUE is returned as a list."
@@ -231,9 +269,9 @@ Uses make-process to avoid shell injection."
   "Return configuration whose rootFolder contains FILE-PATH.
 Returns nil if no matching configuration found."
   (seq-find (lambda (config)
-              (when-let ((root (orgnote--config-get "rootFolder" config)))
-                (file-in-directory-p file-path root)))
-            (orgnote--read-all-configs)))
+               (when-let ((root (orgnote--config-get orgnote--config-key-root config)))
+                 (file-in-directory-p file-path root)))
+             (orgnote--read-all-configs)))
 
 (defun orgnote--file-in-config-dir-p ()
   "Return non-nil if current buffer file is in any configured rootFolder."
@@ -269,7 +307,7 @@ Returns nil if no matching configuration found."
 (defun orgnote--autosync-execute (config)
   "Execute sync for CONFIG, killing any previous process.
 Uses make-process to avoid shell injection vulnerabilities."
-  (let ((account-name (orgnote--config-get "name" config)))
+  (let ((account-name (orgnote--config-get orgnote--config-key-name config)))
     (orgnote--autosync-cancel-process)
     (let* ((log-buffer (orgnote--prepare-log-buffer))
            (script-parts (orgnote--split-execution-script))
@@ -312,7 +350,7 @@ CONTEXT is used for prompting if needed."
          (name-to-config (make-hash-table :test 'equal))
          (server-names '()))
     (dolist (conf configs)
-      (let ((name (orgnote--config-get "name" conf)))
+      (let ((name (orgnote--config-get orgnote--config-key-name conf)))
         (when name
           (puthash name conf name-to-config)
           (push name server-names))))
@@ -327,7 +365,7 @@ CALLBACK is invoked after command completion."
   (unless (file-exists-p orgnote-configuration-file-path)
     (user-error "[orgnote.el] Configuration file %s not found" orgnote-configuration-file-path))
   (let* ((config (orgnote--get-config-with-context "sync"))
-         (account-name (orgnote--config-get "name" config))
+         (account-name (orgnote--config-get orgnote--config-key-name config))
          (script-parts (orgnote--split-execution-script))
          (program (car script-parts))
          (base-args (cdr script-parts))
@@ -343,9 +381,9 @@ CALLBACK is invoked after command completion."
 
 ;;;###autoload
 (defun orgnote-install-dependencies ()
-  "Install orgnote-cli globally using bun."
+  "Install orgnote-cli globally using npm."
   (interactive)
-  (orgnote--execute-async-cmd "bun" '("install" "-g" "orgnote-cli")))
+  (orgnote--execute-async-cmd "npm" '("install" "-g" "orgnote-cli")))
 
 ;;;###autoload
 (defun orgnote-sync ()
@@ -373,14 +411,14 @@ Clears cache before sync."
 Auto-selects account based on current buffer file path."
   (interactive)
   (let* ((config (orgnote--get-config-with-context "reading cache"))
-         (account-name (orgnote--config-get "name" config)))
+         (account-name (orgnote--config-get orgnote--config-key-name config)))
     (find-file (format "~/.config/orgnote/store-%s.json" account-name))))
 
 (defun orgnote--get-orgnote-url ()
   "Get the OrgNote frontend URL from the configuration.
 Auto-selects account based on current buffer file path."
   (let* ((config (orgnote--get-config-with-context "preview"))
-         (client-address (orgnote--config-get "clientAddress" config)))
+         (client-address (orgnote--config-get orgnote--config-key-client config)))
     (if client-address
         client-address
       (user-error "[orgnote.el] clientAddress must be configured in config file"))))
@@ -445,11 +483,149 @@ The hook `orgnote-after-sync-hook' runs after each successful sync."
              (orgnote--file-in-config-dir-p))
     (orgnote-autosync-mode 1)))
 
+(defun orgnote--ws-build-url (config)
+  "Build WebSocket URL for CONFIG.
+Extracts host from remoteAddress and appends /ws/events endpoint."
+  (let* ((remote (orgnote--config-get orgnote--config-key-remote config))
+         (token (orgnote--config-get orgnote--config-key-token config)))
+    (unless remote
+      (user-error "[orgnote.el] remoteAddress not configured"))
+    (unless token
+      (user-error "[orgnote.el] token not configured"))
+    (let* ((ws-scheme (replace-regexp-in-string "^http" "ws" remote))
+           (base-url (if (string-match "\\`\\(ws[s]?://[^/]+\\)" ws-scheme)
+                         (match-string 1 ws-scheme)
+                       ws-scheme)))
+      (format "%s/ws/events?token=%s" base-url token))))
+
+(defun orgnote--ws-parse-payload (frame)
+  "Parse JSON payload from FRAME, returning type or nil."
+  (condition-case err
+      (let ((payload (json-parse-string (websocket-frame-payload frame)
+                                        :object-type 'hash-table)))
+        (when (hash-table-p payload)
+          (let ((type (gethash "type" payload)))
+            (when (and type (stringp type))
+              type))))
+    (error nil)))
+
+(defun orgnote--ws-on-message (ws _frame)
+  "Handle WebSocket message for WS connection."
+  (let ((type (orgnote--ws-parse-payload _frame)))
+    (when (and type (string= type "sync"))
+      (when-let* ((account-name (orgnote--ws-get-account ws))
+                  (entry (gethash account-name orgnote--ws-connections))
+                  (config (plist-get entry :config)))
+        (orgnote--pretty-log "Received sync event for account: %s" account-name)
+        (orgnote--autosync-execute config)))))
+
+(defun orgnote--ws-on-close (ws)
+  "Handle WebSocket close for WS."
+  (when-let* ((account-name (orgnote--ws-get-account ws))
+              (entry (gethash account-name orgnote--ws-connections))
+              (config (plist-get entry :config)))
+    (remhash account-name orgnote--ws-connections)
+    (remhash ws orgnote--ws-reverse-map)
+    (orgnote--pretty-log "WebSocket closed for account: %s" account-name)
+    (when orgnote-autosync-global-mode
+      (orgnote--ws-schedule-reconnect config))))
+
+(defun orgnote--ws-get-account (ws)
+  "Get account name for WebSocket WS from reverse map."
+  (gethash ws orgnote--ws-reverse-map))
+
+(defun orgnote--ws-on-error (_ws action err)
+  "Handle WebSocket ERR for ACTION."
+  (let ((err-msg (cond
+                  ((stringp err) err)
+                  ((errorp err) (error-message-string err))
+                  (t (format "%s" err)))))
+    (orgnote--pretty-log "WebSocket error during %s: %s" action err-msg)))
+
+(defun orgnote--ws-open-p (account-name)
+  "Return non-nil if WebSocket for ACCOUNT-NAME is open."
+  (when-let ((entry (gethash account-name orgnote--ws-connections)))
+    (when-let ((ws (plist-get entry :ws)))
+      (websocket-openp ws))))
+
+(defun orgnote--ws-register (account-name ws config)
+  "Register WebSocket WS for ACCOUNT-NAME with cached CONFIG."
+  (puthash account-name (list :ws ws :config config) orgnote--ws-connections)
+  (puthash ws account-name orgnote--ws-reverse-map))
+
+(cl-defun orgnote--ws-connect (config)
+  "Connect to WebSocket for CONFIG.
+Returns the WebSocket connection or nil on failure."
+  (let ((account-name (orgnote--config-get orgnote--config-key-name config)))
+    (when (orgnote--ws-open-p account-name)
+      (cl-return-from orgnote--ws-connect
+        (plist-get (gethash account-name orgnote--ws-connections) :ws)))
+    (condition-case err
+        (let* ((ws-url (orgnote--ws-build-url config))
+               (ws (websocket-open
+                    ws-url
+                    :on-message #'orgnote--ws-on-message
+                    :on-close #'orgnote--ws-on-close
+                    :on-error #'orgnote--ws-on-error)))
+          (orgnote--ws-register account-name ws config)
+          (orgnote--pretty-log "WebSocket connected for account: %s" account-name)
+          ws)
+      (error
+       (orgnote--pretty-log "WebSocket connection failed: %s" (error-message-string err))
+       nil))))
+
+(defun orgnote--ws-cancel-reconnect-timer (account-name)
+  "Cancel reconnect timer for ACCOUNT-NAME if exists."
+  (when-let ((timer (gethash account-name orgnote--ws-reconnect-timers)))
+    (cancel-timer timer)
+    (remhash account-name orgnote--ws-reconnect-timers)))
+
+(defun orgnote--ws-disconnect (account-name)
+  "Disconnect WebSocket for ACCOUNT-NAME."
+  (orgnote--ws-cancel-reconnect-timer account-name)
+  (when-let ((entry (gethash account-name orgnote--ws-connections)))
+    (let ((ws (plist-get entry :ws)))
+      (when (and ws (websocket-openp ws))
+        (websocket-close ws))
+      (remhash ws orgnote--ws-reverse-map)))
+  (remhash account-name orgnote--ws-connections))
+
+(defun orgnote--ws-disconnect-all ()
+  "Disconnect all WebSocket connections."
+  (let ((accounts (hash-table-keys orgnote--ws-connections)))
+    (dolist (account-name accounts)
+      (orgnote--ws-disconnect account-name))))
+
+(defun orgnote--ws-schedule-reconnect (config)
+  "Schedule WebSocket reconnect for CONFIG."
+  (let ((account-name (orgnote--config-get orgnote--config-key-name config)))
+    (orgnote--ws-cancel-reconnect-timer account-name)
+    (puthash account-name
+             (run-with-timer orgnote-ws-reconnect-delay nil
+                             #'orgnote--ws-reconnect config)
+             orgnote--ws-reconnect-timers)))
+
+(defun orgnote--ws-reconnect (config)
+  "Attempt to reconnect WebSocket for CONFIG."
+  (let ((account-name (orgnote--config-get orgnote--config-key-name config)))
+    (orgnote--ws-cancel-reconnect-timer account-name)
+    (when orgnote-autosync-global-mode
+      (orgnote--ws-connect config))))
+
+(defun orgnote--ws-connect-all ()
+  "Connect WebSocket for all configured accounts."
+  (dolist (config (orgnote--read-all-configs))
+    (orgnote--ws-connect config)))
+
 ;;;###autoload
 (define-globalized-minor-mode orgnote-autosync-global-mode
   orgnote-autosync-mode
   orgnote-autosync--maybe-enable
-  :group 'orgnote)
+  :group 'orgnote
+  (when orgnote-autosync-global-mode
+    (orgnote--ws-connect-all))
+  (unless orgnote-autosync-global-mode
+    (orgnote--ws-disconnect-all)))
 
 (provide 'orgnote)
 ;;; orgnote.el ends here

@@ -46,10 +46,11 @@ For correct usage you need to have API and activation key
 - [[https://github.com/Artawower/orgnote][OrgNote app. Main repo]] 
 * Install
 ** Install dependencies
-1. [[https://docs.npmjs.com/downloading-and-installing-node-js-and-npm/][Install npm]]
+1. Install [[https://docs.npmjs.com/downloading-and-installing-node-js-and-npm/][Node.js (includes npm)]] or [[https://bun.sh/][bun]]
 2. Install orgnote-cli
    Run =M-x orgnote-install-dependencies=
    or =npm install -g orgnote-cli=
+3. Install required Emacs packages: ~tomlparse~ and ~websocket~
 
 ** Doom
 ~package.el~
@@ -68,32 +69,56 @@ For correct usage you need to have API and activation key
 ** Straight
 #+BEGIN_SRC emacs-lisp
 (use-package orgnote
-  :general (:states '(normal visual)
-                    :keymaps 'org-mode-map
-                    "SPC ns" 'orgnote-sync))
+  :ensure t
+  :config
+  (orgnote-autosync-global-mode 1))
+
+** For development version
+#+BEGIN_SRC emacs-lisp :results silent
+(use-package orgnote
+  :ensure (:host github :repo "Artawower/orgnote.el" :branch "dev")
+  :config
+  (orgnote-autosync-global-mode 1))
 #+END_SRC
 * Usage
-** Variables
-~orgnote-debug-p~ - enable debug mode for additional logging. Consider enabling the flag when you create a bug-related question
+** Auto-sync modes
+~orgnote-autosync-mode~ - local minor mode that enables auto-sync on save for the current buffer. Only activates for org files within configured ~rootFolder~ directories.
 
-~orgnote-configuration-file-path~ - path to the configuration file. Default is `~/.config/orgnote/config.toml` (JSON is deprecated)
+~orgnote-autosync-global-mode~ - global mode that enables ~orgnote-autosync-mode~ for all qualifying org files. Also establishes WebSocket connections for real-time sync notifications from the server.
 
-~orgnote-execution-script~ - path to the execution script. Default is ~orgnote-cli~
+** Commands
+- ~orgnote-sync~ - manually trigger sync for the current account
+- ~orgnote-force-sync~ - force sync, clearing local cache first
+- ~orgnote-open-configuration~ - open config file for editing
+- ~orgnote-share-current-buffer~ - share current org buffer via OrgNote preview
+- ~orgnote-share-region~ - share selected region via OrgNote preview
 
-=orgnote-enable-roam-sync-p= - enable org-roam sync. Default is =nil=
-
-** Configuraiton
+** Configuration
 Read more about CLI tool [[https://github.com/Artawower/orgnote-cli][here]]
 
-Example `config.toml`:
+Example ~config.toml~:
 #+BEGIN_SRC toml
-[[root]]
+[[accounts]]
 name = "personal"
-remoteAddress = "https://org-note.com"
-token = "your-token"
+remoteAddress = "https://dev.org-note.com"
+clientAddress = "https://dev.org-note.com"
+token = "your-api-token"
+rootFolder = "~/org-roam"
+logPath = "~/.cache/orgnote.log"
 #+END_SRC
 
-TOML parsing uses `tomlparse` (tree-sitter). This requires Emacs 29.1+ and the TOML grammar installed:
+** Required fields:
+- ~name~ - account identifier
+- ~remoteAddress~ - backend API URL
+- ~token~ - API token from OrgNote settings
+- ~rootFolder~ - local directory to sync (required for auto-sync)
+
+** Optional fields:
+- ~clientAddress~ - frontend URL for preview sharing
+- ~logPath~ - path to log file
+
+** TOML parsing setup
+TOML parsing uses ~tomlparse~ (tree-sitter). Requires Emacs 29.1+ and TOML grammar:
 #+BEGIN_SRC emacs-lisp
 (add-to-list
  'treesit-language-source-alist
