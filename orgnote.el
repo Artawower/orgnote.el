@@ -90,6 +90,9 @@ Functions in this hook are called with no arguments.")
 (defconst orgnote--config-key-client "clientAddress"
   "Config key for client/frontend address.")
 
+(defconst orgnote--config-key-ws "wsAddress"
+  "Config key for WebSocket address (optional, overrides derived URL).")
+
 (defvar orgnote--ws-connections (make-hash-table :test 'equal)
   "Hash table mapping account names to connection plists.
 Each entry is (:ws <connection> :config <config-hashtable>).")
@@ -301,7 +304,8 @@ Returns nil if no matching configuration found."
   "Prepare log buffer for new output, preventing unbounded growth."
   (let ((buffer (get-buffer-create orgnote--orgnote-log-buffer)))
     (with-current-buffer buffer
-      (erase-buffer))
+      (let ((inhibit-read-only t))
+        (erase-buffer)))
     buffer))
 
 (defun orgnote--autosync-execute (config)
@@ -485,18 +489,21 @@ The hook `orgnote-after-sync-hook' runs after each successful sync."
 
 (defun orgnote--ws-build-url (config)
   "Build WebSocket URL for CONFIG.
-Extracts host from remoteAddress and appends /ws/events endpoint."
-  (let* ((remote (orgnote--config-get orgnote--config-key-remote config))
+Uses wsAddress if set, otherwise derives from remoteAddress."
+  (let* ((ws-address (orgnote--config-get orgnote--config-key-ws config))
+         (remote (orgnote--config-get orgnote--config-key-remote config))
          (token (orgnote--config-get orgnote--config-key-token config)))
-    (unless remote
-      (user-error "[orgnote.el] remoteAddress not configured"))
     (unless token
       (user-error "[orgnote.el] token not configured"))
-    (let* ((ws-scheme (replace-regexp-in-string "^http" "ws" remote))
-           (base-url (if (string-match "\\`\\(ws[s]?://[^/]+\\)" ws-scheme)
-                         (match-string 1 ws-scheme)
-                       ws-scheme)))
-      (format "%s/ws/events?token=%s" base-url token))))
+    (if ws-address
+        (format "%s?token=%s" (replace-regexp-in-string "^http" "ws" ws-address) token)
+      (unless remote
+        (user-error "[orgnote.el] remoteAddress not configured"))
+      (let* ((ws-scheme (replace-regexp-in-string "^http" "ws" remote))
+             (host (if (string-match "\\`wss?://\\([^/]+\\)" ws-scheme)
+                       (match-string 1 ws-scheme)
+                     ws-scheme)))
+        (format "wss://%s/ws/events?token=%s" host token)))))
 
 (defun orgnote--ws-parse-payload (frame)
   "Parse JSON payload from FRAME, returning type or nil."
@@ -538,7 +545,6 @@ Extracts host from remoteAddress and appends /ws/events endpoint."
   "Handle WebSocket ERR for ACTION."
   (let ((err-msg (cond
                   ((stringp err) err)
-                  ((errorp err) (error-message-string err))
                   (t (format "%s" err)))))
     (orgnote--pretty-log "WebSocket error during %s: %s" action err-msg)))
 
