@@ -11,3 +11,13 @@
 *.~undo-tree
 
 .DS_Store
+
+# AI
+.aider*
+.serena
+plans/review
+node-compile-cache/
+.pi
+.pi-lens
+.playwright-mcp
+.superset
