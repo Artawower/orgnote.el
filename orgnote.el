@@ -418,6 +418,12 @@ Auto-selects account based on current buffer file path."
          (account-name (orgnote--config-get orgnote--config-key-name config)))
     (find-file (format "~/.config/orgnote/store-%s.json" account-name))))
 
+;;;###autoload
+(defun orgnote-open-log-buffer ()
+  "Open OrgNote log buffer."
+  (interactive)
+  (switch-to-buffer orgnote--orgnote-log-buffer))
+
 (defun orgnote--get-orgnote-url ()
   "Get the OrgNote frontend URL from the configuration.
 Auto-selects account based on current buffer file path."
