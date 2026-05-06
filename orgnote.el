@@ -3,7 +3,7 @@
 ;; Author: Artur Yaroshenko <artawower@protonmail.com>
 ;; URL: https://github.com/Artawower/orgnote.el
 ;; Package-Requires: ((emacs "29.1") (tomlparse "1.0.0") (websocket "1.15") (xterm-color "2.0"))
-;; Version: 0.15.0
+;; Version: 0.50.0
 ;; Copyright (C) 2023 Artur Yaroshenko
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -107,6 +107,9 @@ Each entry is (:ws <connection> :config <config-hashtable>).")
 (defvar orgnote--ws-reconnect-timers (make-hash-table :test 'equal)
   "Hash table mapping account names to reconnect timers.")
 
+(defvar orgnote--ws-fatal-accounts (make-hash-table :test 'equal)
+  "Hash table of account names with fatal WS errors that prevent reconnection.")
+
 (defvar orgnote--ws-reconnect-attempts (make-hash-table :test 'equal)
   "Hash table mapping account names to reconnect attempt counts.")
 
@@ -134,15 +137,20 @@ This debounce prevents multiple syncs during rapid saves."
   (apply #'message (concat "[orgnote.el] " format-text) args))
 
 (defun orgnote--ws-log (format-string &rest args)
-  "Log WebSocket event to *Messages* and `orgnote--ws-events-buffer'."
+  "Log WebSocket event to `orgnote--ws-events-buffer' only."
   (let ((msg (apply #'format (concat "[orgnote.el] " format-string) args)))
-    (message "%s" msg)
     (with-current-buffer (get-buffer-create orgnote--ws-events-buffer)
       (let ((inhibit-read-only t))
         (goto-char (point-max))
         (insert (format "%s %s\n"
                         (format-time-string "[%Y-%m-%d %H:%M:%S]")
                         msg))))))
+
+(defun orgnote--ws-notify (format-string &rest args)
+  "Log WebSocket event to buffer AND show in *Messages*."
+  (let ((msg (apply #'format format-string args)))
+    (orgnote--ws-log "%s" msg)
+    (message "[orgnote.el] %s" msg)))
 
 (defconst orgnote--config-parsers
   '(("toml" . orgnote--parse-toml-config)
@@ -569,6 +577,7 @@ Uses wsAddress if set, otherwise derives from remoteAddress."
 (defun orgnote--ws-on-open (ws)
   "Handle WebSocket open for WS."
   (when-let ((account-name (orgnote--ws-get-account ws)))
+    (remhash account-name orgnote--ws-fatal-accounts)
     (remhash account-name orgnote--ws-reconnect-attempts)
     (orgnote--ws-log "WebSocket opened for account: %s" account-name)))
 
@@ -590,19 +599,51 @@ Uses wsAddress if set, otherwise derives from remoteAddress."
     (remhash account-name orgnote--ws-connections)
     (remhash ws orgnote--ws-reverse-map)
     (orgnote--ws-log "WebSocket closed for account: %s" account-name)
-    (when orgnote-autosync-global-mode
+    (when (and orgnote-autosync-global-mode
+               (not (gethash account-name orgnote--ws-fatal-accounts)))
       (orgnote--ws-schedule-reconnect config))))
 
 (defun orgnote--ws-get-account (ws)
   "Get account name for WebSocket WS from reverse map."
   (gethash ws orgnote--ws-reverse-map))
 
+(defun orgnote--ws-http-error-status (err)
+  "Return HTTP status code if ERR is websocket-received-error-http-response, else nil."
+  (when (and (listp err)
+             (eq (car err) 'websocket-received-error-http-response))
+    (cadr err)))
+
+(defun orgnote--ws-wrong-url-error-p (status)
+  "Return non-nil if STATUS indicates wrong URL (HTML served instead of WS)."
+  (eql status 200))
+
+(defun orgnote--ws-auth-error-p (status)
+  "Return non-nil if STATUS indicates authentication failure."
+  (member status '(401 403)))
+
+(defun orgnote--ws-mark-fatal (account-name)
+  "Mark ACCOUNT-NAME as having a fatal WS error and cancel reconnect timers."
+  (when account-name
+    (puthash account-name t orgnote--ws-fatal-accounts)
+    (orgnote--ws-cancel-reconnect-timer account-name)))
+
 (defun orgnote--ws-on-error (ws action err)
-  "Handle WebSocket ERR for ACTION. Close connection to prevent error storms."
-  (let ((err-msg (cond
-                  ((stringp err) err)
-                  (t (format "%s" err)))))
-    (orgnote--ws-log "WebSocket error during %s: %s" action err-msg)
+  "Handle WebSocket ERR for ACTION. Stop reconnection on fatal errors."
+  (let* ((account-name (orgnote--ws-get-account ws))
+         (status (orgnote--ws-http-error-status err)))
+    (cond
+     ((and status (orgnote--ws-wrong-url-error-p status))
+      (orgnote--ws-mark-fatal account-name)
+      (orgnote--ws-notify
+       "Wrong WebSocket URL for account '%s' (got HTTP 200, not a WS endpoint). Fix wsAddress in config.toml and re-enable sync."
+       account-name))
+     ((and status (orgnote--ws-auth-error-p status))
+      (orgnote--ws-mark-fatal account-name)
+      (orgnote--ws-notify
+       "WebSocket auth failed for account '%s' (HTTP %d). Fix token in config.toml and re-enable sync."
+       account-name status))
+     (t
+      (orgnote--ws-log "WebSocket error during %s: %s" action (format "%s" err))))
     (when (websocket-openp ws)
       (websocket-close ws))))
 
@@ -647,6 +688,7 @@ Returns the WebSocket connection or nil on failure."
 
 (defun orgnote--ws-disconnect (account-name)
   "Disconnect WebSocket for ACCOUNT-NAME."
+  (remhash account-name orgnote--ws-fatal-accounts)
   (orgnote--ws-cancel-reconnect-timer account-name)
   (remhash account-name orgnote--ws-reconnect-attempts)
   (orgnote--ws-log "Disconnecting WebSocket for account: %s" account-name)
@@ -659,7 +701,7 @@ Returns the WebSocket connection or nil on failure."
 
 (defun orgnote--ws-disconnect-all ()
   "Disconnect all WebSocket connections."
-  (orgnote--ws-log "Disconnecting all WebSockets")
+  (orgnote--ws-notify "Disconnecting all WebSockets")
   (let ((accounts (hash-table-keys orgnote--ws-connections)))
     (dolist (account-name accounts)
       (orgnote--ws-disconnect account-name))))
@@ -670,8 +712,8 @@ Returns the WebSocket connection or nil on failure."
     (orgnote--ws-cancel-reconnect-timer account-name)
     (let ((attempts (1+ (gethash account-name orgnote--ws-reconnect-attempts 0))))
       (if (> attempts orgnote-ws-max-reconnect-attempts)
-          (orgnote--ws-log "Reconnect limit reached for account %s, giving up"
-                           account-name)
+          (orgnote--ws-notify "Reconnect limit reached for account %s, giving up"
+                              account-name)
         (puthash account-name attempts orgnote--ws-reconnect-attempts)
         (orgnote--ws-log "Reconnect attempt %d/%d for account %s in %ds"
                          attempts orgnote-ws-max-reconnect-attempts
