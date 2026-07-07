@@ -3,7 +3,7 @@
 ;; Author: Artur Yaroshenko <artawower@protonmail.com>
 ;; URL: https://github.com/Artawower/orgnote.el
 ;; Package-Requires: ((emacs "29.1") (tomlparse "1.0.0") (websocket "1.15") (xterm-color "2.0"))
-;; Version: 0.50.0
+;; Version: 0.60.0
 ;; Copyright (C) 2023 Artur Yaroshenko
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -673,11 +673,17 @@ Returns the WebSocket connection or nil on failure."
                     :on-open #'orgnote--ws-on-open
                     :on-message #'orgnote--ws-on-message
                     :on-close #'orgnote--ws-on-close
-                    :on-error #'orgnote--ws-on-error)))
+                    :on-error #'orgnote--ws-on-error
+                    :nowait t)))
           (orgnote--ws-register account-name ws config)
           ws)
+      (quit
+       (orgnote--ws-log "WebSocket connect interrupted for account: %s" account-name)
+       nil)
       (error
        (orgnote--ws-log "WebSocket connection failed: %s" (error-message-string err))
+       (when orgnote-autosync-global-mode
+         (orgnote--ws-schedule-reconnect config))
        nil))))
 
 (defun orgnote--ws-cancel-reconnect-timer (account-name)
